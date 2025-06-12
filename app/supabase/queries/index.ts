@@ -43,3 +43,16 @@ export async function fetchRecoveryShares(userId: string) {
   }
   return data.map((record: any) => record.share);
 }
+
+export async function fetchUserPasswordHash(email: string) {
+   // Fetch password hash for ZKP verification
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('password_hash')
+        .eq('email', email)
+        .single();
+
+  if (userError || !userData) throw new Error('User data not found.');
+
+  return userData;
+}

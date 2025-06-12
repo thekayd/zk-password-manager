@@ -2,76 +2,47 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/app/lib/supabaseClient';
+import { deriveKey } from '@/app/lib/crypto';
 import LoadingSpinner from '../components/LoadingSpinner';
-
-interface ZKProof {
-  type: string;
-  proof: string;
-  timestamp: string;
-  details: {
-    circuit: string;
-    publicInputs: string[];
-    witness: {
-      username: string;
-      passwordHash: string;
-    };
-    verification: {
-      status: string;
-      timestamp: string;
-      proofId: string;
-    };
-  };
-}
+import { fetchUserPasswordHash } from '../supabase/queries';
 
 export default function Login() {
-  const [formData, setFormData] = useState({
-    username: '',
-    password: ''
-  });
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showProof, setShowProof] = useState(false);
-  const [proofDetails, setProofDetails] = useState<{
-    original: ZKProof;
-    verification: any;
-  } | null>(null);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setShowProof(false);
-    setProofDetails(null);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+      // Supabase Login
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
       });
 
-      const data = await response.json();
+      if (authError) throw new Error(authError.message);
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
+      // Fetch password hash for ZKP verification
+      const userData = await fetchUserPasswordHash(formData.email);
 
-      // this is to store the session token
-      localStorage.setItem('sessionToken', data.sessionToken);
-      
-      // this is to show the proof details of zk proof
-      setProofDetails({
-        original: data.originalProof,
-        verification: data.verificationResult,
-      });
-      setShowProof(true);
+      if (!userData) throw new Error('User data not found.');
 
-      setTimeout(() => {
+      // Derive client-side hash
+      const key = await deriveKey(formData.password);
+      const rawKey = await crypto.subtle.exportKey('raw', key);
+      const clientPasswordHash = btoa(String.fromCharCode(...new Uint8Array(rawKey)));
+
+      if (clientPasswordHash === userData.password_hash) {
+        alert('ZK Proof verified successfully ✅');
         router.push('/dashboard');
-      }, 9000);
+      } else {
+        throw new Error('Zero-Knowledge Proof failed ❌');
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -96,25 +67,21 @@ export default function Login() {
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                Username
-              </label>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
               <input
-                id="username"
-                name="username"
-                type="text"
+                id="email"
+                name="email"
+                type="email"
                 required
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                value={formData.username}
-                onChange={(e) => setFormData({...formData, username: e.target.value})}
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 disabled={loading}
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
               <input
                 id="password"
                 name="password"
@@ -122,7 +89,7 @@ export default function Login() {
                 required
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 value={formData.password}
-                onChange={(e) => setFormData({...formData, password: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 disabled={loading}
               />
             </div>
@@ -152,36 +119,6 @@ export default function Login() {
           </div>
         </div>
       </div>
-
-      {showProof && proofDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h3 className="text-xl font-bold mb-4">ZK Proof Verification</h3>
-              
-              <div className="space-y-6">
-                <div>
-                  <h4 className="font-semibold mb-2">Original Proof (Registration)</h4>
-                  <pre className="bg-gray-50 p-4 rounded-md overflow-x-auto">
-                    {JSON.stringify(proofDetails.original, null, 2)}
-                  </pre>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold mb-2">Verification Result</h4>
-                  <pre className="bg-gray-50 p-4 rounded-md overflow-x-auto">
-                    {JSON.stringify(proofDetails.verification, null, 2)}
-                  </pre>
-                </div>
-
-                <div className="text-center text-green-600 font-semibold">
-                  ✓ ZK Proof verified successfully
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

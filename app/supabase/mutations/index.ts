@@ -38,3 +38,15 @@ export async function saveRecoveryShare(userId: string, share: string) {
   }
   return true;
 }
+
+export async function updateUserPasswordHash(email: string, passwordHash: string) {
+
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ password_hash: passwordHash })
+        .eq('email', email);
+
+  if (updateError) throw new Error(updateError.message);
+
+  return true;
+}
