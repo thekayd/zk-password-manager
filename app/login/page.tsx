@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next-nprogress-bar';
 import { supabase } from '@/app/lib/supabaseClient';
 import { generateToken } from '@/app/lib/jwt';
 import { generateChallenge, generateProof, validateProof } from '@/app/lib/zkp';
-import { fetchUserAuthData } from '../supabase/queries';
+import { fetchUserAuthData, fetchWebAuthnID } from '../supabase/queries';
 import { setNewChallenge, recordFailedAttempt, resetFailedAttempts } from '../supabase/mutations';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { toast } from 'sonner';
@@ -131,7 +131,6 @@ export default function Login() {
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'An unexpected error occurred during login');
-      // A toast is already shown for specific errors, only show generic error toast if no specific message
       if (!err.message || err.message === 'An unexpected error occurred during login') {
         toast.error('An unexpected error occurred during login');
       }
@@ -139,6 +138,47 @@ export default function Login() {
       setLoading(false);
     }
   };
+
+  const handleBiometricLogin = async () => {
+  setLoading(true);
+  setError('');
+
+  try {
+    // This uses query to fetch user biometric ID
+    const biometricId = await fetchWebAuthnID(formData.email)
+
+    if (!biometricId || !biometricId.webauthn_id) {
+      throw new Error('Biometric ID not found.');
+    }
+
+    const publicKey: PublicKeyCredentialRequestOptions = {
+      challenge: new Uint8Array(32),
+      allowCredentials: [{
+        id: Uint8Array.from(atob(biometricId.webauthn_id), c => c.charCodeAt(0)),
+        type: 'public-key'
+      }],
+      timeout: 60000,
+    };
+
+    // Then using navigator prompts biometric login
+    const assertion = await navigator.credentials.get({ publicKey });
+
+    if (!assertion) throw new Error('Biometric authentication failed.');
+
+    // on biometric success it then generates token and login
+    const token = await generateToken(biometricId.id);
+    localStorage.setItem('sessionToken', token);
+
+    alert('Biometric authentication successful ✅');
+    router.push('/dashboard');
+
+  } catch (err: any) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
@@ -185,7 +225,7 @@ export default function Login() {
             </div>
           </div>
 
-          <div>
+          <div className='flex justify-between gap-4'>
             <button
               type="submit"
               className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -193,6 +233,14 @@ export default function Login() {
             >
               {loading ? <LoadingSpinner /> : 'Login with ZK Proof'}
             </button>
+            <button
+  onClick={handleBiometricLogin}
+  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+  disabled={loading}
+>
+  {loading ? <LoadingSpinner /> : 'Login with Biometrics'}
+</button>
+
           </div>
         </form>
 

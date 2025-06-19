@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next-nprogress-bar';
 import { supabase } from '@/app/lib/supabaseClient';
 import { deriveKey } from '@/app/lib/crypto';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -39,12 +39,12 @@ export default function Register() {
       if (authError) throw new Error(authError.message);
       if (!authData.user) throw new Error('No user data returned from signup');
 
-      // We derive the password hash using ZK method
+      // we then derive the password hash using ZK method
       const key = await deriveKey(formData.password);
       const rawKey = await crypto.subtle.exportKey('raw', key);
       const passwordHash = btoa(String.fromCharCode(...new Uint8Array(rawKey)));
 
-      // Create user record in users table
+      // This then uses mutations and creates user record in users table
       const userCreated = await createUserRecord(formData.email, passwordHash, authData.user.id);
       if (!userCreated) {
         throw new Error('Failed to create user record');
@@ -60,6 +60,15 @@ export default function Register() {
       console.error(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBiometricRegistration = async () => {
+    try {
+      router.push('/biometric/register');
+    } catch (err: any) {
+      console.error('Biometric registration error:', err);
+      toast.error('Failed to start biometric registration');
     }
   };
 
@@ -122,13 +131,22 @@ export default function Register() {
             </div>
           </div>
 
-          <div>
+          <div className="space-y-4">
             <button
               type="submit"
               className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading}
             >
               {loading ? <LoadingSpinner /> : 'Register with ZK Proof'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBiometricRegistration}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+              disabled={loading}
+            >
+              Register with Biometrics
             </button>
           </div>
         </form>

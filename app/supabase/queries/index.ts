@@ -73,3 +73,18 @@ export async function fetchUserAuthData(email: string) {
   return data;
 }
 
+// fetches webauthn id for biometric login
+export async function fetchWebAuthnID(email: string){
+  const { data, error } = await supabase
+      .from('users')
+      .select('id, webauthn_id')
+      .eq('email', email)
+      .single();
+
+      if(error){
+        console.error('Error fetching Webauthn Id', error)
+        return null
+      }
+      return data
+
+}

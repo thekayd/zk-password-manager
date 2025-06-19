@@ -155,3 +155,39 @@ export async function resetLockAndAttempts(email: string) {
 
   if (error) console.error('Error resetting user lock:', error);
 } 
+
+ // This function saves credential ID to Supabase
+ export async function saveCredentialId(credentialId: string, email: string){
+ const { error } = await supabase
+        .from('users')
+        .update({ webauthn_id: credentialId })
+        .eq('email', email);
+
+      if (error) {
+        console.error('Failed to save biometric ID.')
+        return false
+      }
+      return true;
+ }
+
+interface WebAuthnKey {
+  id: string;
+  publicKey: string;
+}
+
+// This function saves the public key to a string in the database
+export async function saveWebAuthnPublicKey(credential: PublicKeyCredential, email: string) {
+  // this extracts and converts the public key to a base64 string
+  const publicKeyString = btoa(String.fromCharCode(...new Uint8Array((credential.response as AuthenticatorAttestationResponse).getPublicKey() as ArrayBuffer)));
+
+  const {error} = await supabase
+  .from('users')
+  .update({webauthn_public_key: publicKeyString})
+  .eq('email', email);
+  if (error) {
+    console.error("Failed to save web autn public key:", error)
+    return false
+  }
+  return true
+}
+     
