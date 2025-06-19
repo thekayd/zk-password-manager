@@ -6,7 +6,7 @@ import { supabase } from '@/app/lib/supabaseClient';
 import { deriveKey } from '@/app/lib/crypto';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { toast } from 'sonner';
-import { updateUserPasswordHash } from '../supabase/mutations';
+import { updateUserPasswordHash, createUserRecord } from '../supabase/mutations';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -37,20 +37,27 @@ export default function Register() {
       });
 
       if (authError) throw new Error(authError.message);
+      if (!authData.user) throw new Error('No user data returned from signup');
 
-      // Derive password hash using ZK method
+      // We derive the password hash using ZK method
       const key = await deriveKey(formData.password);
       const rawKey = await crypto.subtle.exportKey('raw', key);
       const passwordHash = btoa(String.fromCharCode(...new Uint8Array(rawKey)));
 
-      // Store password hash in users table
-      await updateUserPasswordHash(formData.email, passwordHash);
+      // Create user record in users table
+      const userCreated = await createUserRecord(formData.email, passwordHash, authData.user.id);
+      if (!userCreated) {
+        throw new Error('Failed to create user record');
+      }
+
+      // Then we update password hash in users table
+      //await updateUserPasswordHash(formData.email, passwordHash);
 
       toast.success('Registered successfully ✅');
       router.push('/login');
     } catch (err: any) {
       setError(err.message);
-      toast.error(err.message);
+      console.error(err.message);
     } finally {
       setLoading(false);
     }

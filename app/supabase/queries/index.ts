@@ -1,6 +1,6 @@
 import { supabase } from '@/app/lib/supabaseClient';
 
-// Fetch encrypted vault
+// This fetches the encrypted vault
 export async function fetchVault(userId: string) {
   const { data, error } = await supabase
     .from('vaults')
@@ -15,7 +15,7 @@ export async function fetchVault(userId: string) {
   return data.entries;
 }
 
-// Fetch activity logs
+// This function exports activity logs
 export async function fetchActivityLogs(userId: string) {
   const { data, error } = await supabase
     .from('activity_logs')
@@ -30,7 +30,7 @@ export async function fetchActivityLogs(userId: string) {
   return data;
 }
 
-// Fetch recovery shares
+// This function fetches recovery shares
 export async function fetchRecoveryShares(userId: string) {
   const { data, error } = await supabase
     .from('recovery_shares')
@@ -45,7 +45,7 @@ export async function fetchRecoveryShares(userId: string) {
 }
 
 export async function fetchUserPasswordHash(email: string) {
-   // Fetch password hash for ZKP verification
+   // This fetches password hash for ZKP verification
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('password_hash')
@@ -56,3 +56,20 @@ export async function fetchUserPasswordHash(email: string) {
 
   return userData;
 }
+
+// This function fetches user authentication data
+export async function fetchUserAuthData(email: string) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, password_hash, failed_attempts, challenge, locked_until')
+    .eq('email', email)
+    .single();
+
+  if (error) {
+    console.error('Error fetching user data:', error);
+    return null;
+  }
+
+  return data;
+}
+

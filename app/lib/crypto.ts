@@ -97,32 +97,71 @@ export async function decryptAESGCM(cipherText: string, iv: string, key: CryptoK
   return decoder.decode(decrypted);
 }
 
-// Key Derivation using PBKDF2
-export async function deriveKey(password: string, salt: string = 'zkp-salt'): Promise<CryptoKey> {
-  const encoder = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(password),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveKey']
-  );
+// This helper function is to safely convert ArrayBuffer to string
+export function arrayBufferToString(buffer: ArrayBuffer | ArrayBufferView): string {
+  console.log('Buffer type:', {
+    isArrayBuffer: buffer instanceof ArrayBuffer,
+    hasBuffer: 'buffer' in buffer,
+    constructor: buffer.constructor.name,
+    type: typeof buffer,
+    buffer: buffer
+  });
 
-  return await crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt: encoder.encode(salt),
-      iterations: 100000,
-      hash: 'SHA-256'
-    },
-    baseKey,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  );
+  try {
+    // This gets the underlying ArrayBuffer
+    const arrayBuffer = 'buffer' in buffer ? buffer.buffer : buffer;
+    console.log('ArrayBuffer type:', {
+      isArrayBuffer: arrayBuffer instanceof ArrayBuffer,
+      constructor: arrayBuffer.constructor.name,
+      type: typeof arrayBuffer
+    });
+
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const chars = [];
+    for (let i = 0; i < uint8Array.length; i++) {
+      chars.push(String.fromCharCode(uint8Array[i]));
+    }
+    return btoa(chars.join(''));
+  } catch (error) {
+    console.error('Error in arrayBufferToString:', error);
+    throw error;
+  }
 }
 
-// Manual XOR Encryption (Fallback)
+// exports the Key Derivation using PBKDF2
+export async function deriveKey(password: string, salt: string = 'zkp-salt'): Promise<CryptoKey> {
+  try {
+    const encoder = new TextEncoder();
+    const passwordBuffer = encoder.encode(password);
+    const saltBuffer = encoder.encode(salt);
+
+    const baseKey = await crypto.subtle.importKey(
+      'raw',
+      passwordBuffer,
+      { name: 'PBKDF2' },
+      false,
+      ['deriveKey']
+    );
+
+    return await crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: saltBuffer,
+        iterations: 100000,
+        hash: 'SHA-256'
+      },
+      baseKey,
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt']
+    );
+  } catch (error) {
+    console.error('Error deriving key:', error);
+    throw new Error('Failed to derive key');
+  }
+}
+
+// fallback in using Manual XOR Encryption (Fallback)
 export function xorEncryptDecrypt(input: string, key: string): string {
   let output = '';
   for (let i = 0; i < input.length; i++) {

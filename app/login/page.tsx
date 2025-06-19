@@ -1,17 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/app/lib/supabaseClient';
-import { deriveKey } from '@/app/lib/crypto';
+import { generateToken } from '@/app/lib/jwt';
+import { generateChallenge, generateProof, validateProof } from '@/app/lib/zkp';
+import { fetchUserAuthData } from '../supabase/queries';
+import { setNewChallenge, recordFailedAttempt, resetFailedAttempts } from '../supabase/mutations';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { fetchUserPasswordHash } from '../supabase/queries';
+import { toast } from 'sonner';
 
 export default function Login() {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
+  const [challenge, setChallenge] = useState('');
+
+  // when an email is provided, it generates and stores a new challenge
+  useEffect(() => {
+    async function createChallenge() {
+      if (!formData.email) return;
+      const newChallenge = generateChallenge();
+      setChallenge(newChallenge);
+      await setNewChallenge(formData.email, newChallenge);
+    }
+
+    createChallenge();
+  }, [formData.email]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,32 +35,106 @@ export default function Login() {
     setError('');
 
     try {
-      // Supabase Login
+      console.log('Attempting to sign in with Supabase...');
+      
+      // we then first check if the user exists and if they're locked out
+      const userData = await fetchUserAuthData(formData.email);
+      if (!userData) {
+        console.error('User data not found for email:', formData.email);
+        toast.error('Invalid login credentials');
+        throw new Error('Invalid login credentials');
+      }
+
+      // then we check if account is locked based on brute force amount
+      //lock out after too many attempts to log in
+      if (userData.locked_until && new Date(userData.locked_until) > new Date()) {
+        const timeLeft = Math.ceil((new Date(userData.locked_until).getTime() - new Date().getTime()) / 60000);
+        const errorMessage = `Account is locked. Please try again in ${timeLeft} minutes.`;
+        toast.error(errorMessage, {
+          duration: 5000,
+          description: 'Too many failed login attempts'
+        });
+        throw new Error(errorMessage);
+      }
+
+      // this checks failed attempts
+      if (userData.failed_attempts >= 5) {
+        // if we reach here, it means the account was locked but the time has expired
+        // This then resets the lock and failed attempts
+        await resetFailedAttempts(formData.email);
+        toast.info('Account lock has expired. You can try logging in again.', {
+          duration: 4000
+        });
+      }
+
+      // Uses Supabase auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       });
 
-      if (authError) throw new Error(authError.message);
+      if (authError) {
+        console.error('Supabase auth error:', authError);
+        // Records the failed attempt before throwing the error using query
+        await recordFailedAttempt(formData.email);
+        
+        // this nthen fetches updated user data to check if this attempt caused a lock
+        const updatedUserData = await fetchUserAuthData(formData.email);
+        if (updatedUserData?.failed_attempts >= 5) {
+          toast.error('Account has been locked for 10 minutes due to too many failed attempts.', {
+            duration: 5000
+          });
+          throw new Error('Account has been locked for 10 minutes due to too many failed attempts.');
+        } else {
+          const remainingAttempts = 5 - (updatedUserData?.failed_attempts || 0);
+          toast.error(`Invalid login credentials. ${remainingAttempts} attempts remaining before account lock.`, {
+            duration: 4000
+          });
+          throw new Error('Invalid login credentials');
+        }
+      }
 
-      // Fetch password hash for ZKP verification
-      const userData = await fetchUserPasswordHash(formData.email);
+      console.log('Supabase auth successful, fetching user data...');
 
-      if (!userData) throw new Error('User data not found.');
+      // A ZKP proof is then generated and stored
+      console.log('Generating ZKP proof...');
+      const clientProof = await generateProof(formData.password, userData.challenge);
 
-      // Derive client-side hash
-      const key = await deriveKey(formData.password);
-      const rawKey = await crypto.subtle.exportKey('raw', key);
-      const clientPasswordHash = btoa(String.fromCharCode(...new Uint8Array(rawKey)));
+      // This vaidates proof
+      console.log('Validating ZKP proof...');
+      const isValid = await validateProof(userData.password_hash, clientProof, userData.challenge);
 
-      if (clientPasswordHash === userData.password_hash) {
-        alert('ZK Proof verified successfully ✅');
+      if (isValid) {
+        await resetFailedAttempts(formData.email);
+
+        const token = await generateToken(userData.id);
+        localStorage.setItem('sessionToken', token);
+
+        toast.success('ZK Proof verified successfully ✅');
         router.push('/dashboard');
       } else {
-        throw new Error('Zero-Knowledge Proof failed ❌');
+        await recordFailedAttempt(formData.email);
+        
+        // using queries this then fetches the updated user data to check if this attempt caused a lock
+        const updatedUserData = await fetchUserAuthData(formData.email);
+        if (updatedUserData?.failed_attempts >= 5) {
+          toast.error('Account has been locked for 10 minutes due to too many failed attempts.', {
+            duration: 5000
+          });
+        } else {
+          const remainingAttempts = 5 - (updatedUserData?.failed_attempts || 0);
+          toast.error(`Zero-Knowledge Proof failed. ${remainingAttempts} attempts remaining before account lock.`, {
+            duration: 4000
+          });
+        }
       }
     } catch (err: any) {
-      setError(err.message);
+      console.error('Login error:', err);
+      setError(err.message || 'An unexpected error occurred during login');
+      // A toast is already shown for specific errors, only show generic error toast if no specific message
+      if (!err.message || err.message === 'An unexpected error occurred during login') {
+        toast.error('An unexpected error occurred during login');
+      }
     } finally {
       setLoading(false);
     }
