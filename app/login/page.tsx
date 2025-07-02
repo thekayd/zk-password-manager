@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next-nprogress-bar';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/app/lib/supabaseClient';
 import { generateToken } from '@/app/lib/jwt';
 import { generateChallenge, generateProof, validateProof } from '@/app/lib/zkp';
@@ -16,6 +17,23 @@ export default function Login() {
   const [error, setError] = useState('');
   const router = useRouter();
   const [challenge, setChallenge] = useState('');
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    // This handles the fallback from biometric login
+    const email = searchParams?.get('email');
+    const fallback = searchParams?.get('fallback');
+    
+    if (email) {
+      setFormData(prev => ({ ...prev, email }));
+    }
+    
+    if (fallback === 'biometric') {
+      toast.info('Biometric authentication was unsuccessful. Please use your password to login.', {
+        duration: 5000
+      });
+    }
+  }, [searchParams]);
 
   // when an email is provided, it generates and stores a new challenge
   useEffect(() => {
@@ -186,6 +204,11 @@ export default function Login() {
         <div>
           <h2 className="text-3xl font-bold text-center">Login</h2>
           <p className="mt-2 text-center text-gray-600">Access your zero-knowledge password vault</p>
+          {searchParams?.get('fallback') === 'biometric' && (
+            <p className="mt-2 text-center text-blue-600">
+              Please continue with your password
+            </p>
+          )}
         </div>
 
         {error && (
@@ -225,22 +248,20 @@ export default function Login() {
             </div>
           </div>
 
-          <div className='flex justify-between gap-4'>
+          <div className='flex flex-col gap-4'>
             <button
               type="submit"
               className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading}
             >
-              {loading ? <LoadingSpinner /> : 'Login with ZK Proof'}
+              {loading ? <LoadingSpinner /> : 'Login with Password'}
             </button>
-            <button
-  onClick={handleBiometricLogin}
-  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
-  disabled={loading}
->
-  {loading ? <LoadingSpinner /> : 'Login with Biometrics'}
-</button>
-
+            <a
+              href="/biometric/login"
+              className="text-center text-sm text-blue-600 hover:text-blue-500"
+            >
+              Login with Biometrics
+            </a>
           </div>
         </form>
 

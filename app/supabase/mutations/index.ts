@@ -112,6 +112,7 @@ export async function lockUserAccount(email: string) {
 
 // This creates the user record in users table. inserting it into table
 export async function createUserRecord(email: string, passwordHash: string, userId: string) {
+  console.log('Creating user record with:', { email, userId });
   const { error } = await supabase
     .from('users')
     .insert([
@@ -121,14 +122,22 @@ export async function createUserRecord(email: string, passwordHash: string, user
         password_hash: passwordHash,
         failed_attempts: 0,
         challenge: null,
-        locked_until: null
+        locked_until: null,
+        webauthn_id: null,
+        webauthn_public_key: null
       }
     ]);
 
   if (error) {
-    console.error('Error creating user record:', error);
+    console.error('Error creating user record:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code
+    });
     return false;
   }
+  console.log('User record created successfully');
   return true;
 }
 

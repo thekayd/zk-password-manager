@@ -18,6 +18,19 @@ export default function Register() {
   const [error, setError] = useState('');
   const router = useRouter();
 
+  // Function to check if biometrics are available
+  const checkBiometricAvailability = async () => {
+    try {
+      if (!window.PublicKeyCredential) {
+        return false;
+      }
+      return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    } catch (err) {
+      console.error('Error checking biometric availability:', err);
+      return false;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -30,45 +43,89 @@ export default function Register() {
     }
 
     try {
-      // Supabase SignUp
+      console.log('Starting registration process...');
+      // Supabase SignUp with email confirmation handling
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/login`,
+          data: {
+            email: formData.email
+          }
+        }
       });
 
-      if (authError) throw new Error(authError.message);
-      if (!authData.user) throw new Error('No user data returned from signup');
+      console.log('Supabase auth response:', { 
+        user: authData?.user?.id,
+        session: authData?.session,
+        error: authError?.message,
+        errorStatus: authError?.status
+      });
 
+      if (authError) {
+        console.error('Detailed auth error:', {
+          message: authError.message,
+          status: authError.status,
+          name: authError.name,
+          stack: authError.stack
+        });
+        throw new Error(authError.message);
+      }
+      
+      if (!authData.user) {
+        console.error('No user data in response:', authData);
+        throw new Error('No user data returned from signup');
+      }
+
+      console.log('Deriving password hash...');
       // we then derive the password hash using ZK method
       const key = await deriveKey(formData.password);
       const rawKey = await crypto.subtle.exportKey('raw', key);
       const passwordHash = btoa(String.fromCharCode(...new Uint8Array(rawKey)));
+      console.log('Password hash derived successfully');
 
+      console.log('Creating user record...');
       // This then uses mutations and creates user record in users table
       const userCreated = await createUserRecord(formData.email, passwordHash, authData.user.id);
+      console.log('User record creation result:', userCreated);
+      
       if (!userCreated) {
         throw new Error('Failed to create user record');
       }
 
       // Then we update password hash in users table
       //await updateUserPasswordHash(formData.email, passwordHash);
+      toast.success('Registration successful! ✅');
 
-      toast.success('Registered successfully ✅');
-      router.push('/login');
+      console.log('Checking biometric availability...');
+      // checks if biometrics are available
+      const biometricsAvailable = await checkBiometricAvailability();
+      
+      if (biometricsAvailable) {
+        // This then stores the email in sessionStorage for biometric registration
+        sessionStorage.setItem('registrationEmail', formData.email);
+        toast.info('Biometric authentication is available on your device. Redirecting to setup...', {
+          duration: 3000
+        });
+        setTimeout(() => {
+          router.push('/biometric/register');
+        }, 3000);
+      } else {
+        toast.info('Biometric authentication is not available on your device. Redirecting to dashboard...', {
+          duration: 3000
+        });
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 3000);
+      }
+
     } catch (err: any) {
       setError(err.message);
       console.error(err.message);
+      toast.error(err.message || 'Registration failed');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleBiometricRegistration = async () => {
-    try {
-      router.push('/biometric/register');
-    } catch (err: any) {
-      console.error('Biometric registration error:', err);
-      toast.error('Failed to start biometric registration');
     }
   };
 
@@ -131,24 +188,13 @@ export default function Register() {
             </div>
           </div>
 
-          <div className="space-y-4">
-            <button
-              type="submit"
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading}
-            >
-              {loading ? <LoadingSpinner /> : 'Register with ZK Proof'}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleBiometricRegistration}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
-              disabled={loading}
-            >
-              Register with Biometrics
-            </button>
-          </div>
+          <button
+            type="submit"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading}
+          >
+            {loading ? <LoadingSpinner /> : 'Register'}
+          </button>
         </form>
 
         <div className="text-center mt-4">
