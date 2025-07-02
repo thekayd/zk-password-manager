@@ -199,4 +199,34 @@ export async function saveWebAuthnPublicKey(credential: PublicKeyCredential, ema
   }
   return true
 }
-     
+
+// adds the vault entries
+export async function addVaultEntry(userId: string, website: string, username: string, encryptedPassword: string) {
+  const { data, error } = await supabase
+    .from('password_entries')
+    .insert([{ user_id: userId, website, username, encrypted_password: encryptedPassword }]);
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// updates the password for the vauklt entry
+export async function updateVaultEntry(id: string, encryptedPassword: string) {
+  const { data, error } = await supabase
+    .from('password_entries')
+    .update({ encrypted_password: encryptedPassword })
+    .eq('id', id);
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// This deletes the id of the vault entry
+export async function deleteVaultEntry(id: string) {
+  const { error } = await supabase
+    .from('password_entries')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(error.message);
+}

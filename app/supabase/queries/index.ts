@@ -88,3 +88,15 @@ export async function fetchWebAuthnID(email: string){
       return data
 
 }
+
+// fetches the vault entries details for the specific user
+export async function getVaultEntries(userId: string) {
+  const { data, error } = await supabase
+    .from('password_entries')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return data;
+}
