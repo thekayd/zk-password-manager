@@ -1,188 +1,758 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { toast } from "sonner";
+import LoadingSpinner from "../components/LoadingSpinner";
+import VaultEntry from "../components/VaultEntry";
+import AuthCheck from "../components/AuthCheck";
+import { encryptAESGCM, decryptAESGCM, deriveKey } from "../lib/crypto";
+import { checkPasswordStrength, generatePassword } from "../lib/utils";
+import { verifyToken } from "../lib/jwt";
+import {
+  addVaultEntry,
+  deleteVaultEntry,
+  updateVaultEntry,
+  logActivity,
+} from "../supabase/mutations/index";
+import {
+  getVaultEntries,
+  checkDuplicateEntry,
+} from "../supabase/queries/index";
 
-// this is the dummy vault data
-const dummyVault = [
-  {
-    id: 1,
-    website: 'github.com',
-    username: 'johndoe',
-    password: '••••••••',
-    createdAt: '2024-03-20'
-  },
-  {
-    id: 2,
-    website: 'twitter.com',
-    username: '@johndoe',
-    password: '••••••••',
-    createdAt: '2024-03-19'
-  },
-  {
-    id: 3,
-    website: 'linkedin.com',
-    username: 'john.doe@email.com',
-    password: '••••••••',
-    createdAt: '2024-03-18'
-  },
-  {
-    id: 4,
-    website: 'facebook.com',
-    username: 'johndoe123',
-    password: '••••••••',
-    createdAt: '2024-03-17'
-  }
-];
+interface VaultEntry {
+  id: string;
+  website: string;
+  username: string;
+  encrypted_password: string;
+  created_at: string;
+}
 
-export default function Vault() {
+interface NewEntry {
+  website: string;
+  username: string;
+  password: string;
+  masterPassword: string;
+}
+
+export default function VaultPage() {
+  const [entries, setEntries] = useState<VaultEntry[]>([]);
+  const [filteredEntries, setFilteredEntries] = useState<VaultEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [newPassword, setNewPassword] = useState({
-    website: '',
-    username: '',
-    password: ''
+  const [searchTerm, setSearchTerm] = useState("");
+  const [newEntry, setNewEntry] = useState<NewEntry>({
+    website: "",
+    username: "",
+    password: "",
+    masterPassword: "",
   });
+  const [selectedEntry, setSelectedEntry] = useState<VaultEntry | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isViewing, setIsViewing] = useState(false);
+  const [decryptedPassword, setDecryptedPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    loadEntries();
+  }, []);
+
+  // Filter entries based on search term
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredEntries(entries);
+    } else {
+      const filtered = entries.filter(
+        (entry) =>
+          entry.website.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          entry.username.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredEntries(filtered);
+    }
+  }, [searchTerm, entries]);
+
+  async function loadEntries() {
+    try {
+      const sessionToken = localStorage.getItem("sessionToken");
+      if (!sessionToken) {
+        toast.error("Authentication required");
+        return;
+      }
+      const { userId } = await verifyToken(sessionToken);
+      const data = await getVaultEntries(userId);
+      setEntries(data);
+      setFilteredEntries(data);
+    } catch (error) {
+      toast.error("Failed to load vault entries");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
+    setLoading(true);
 
-    setIsDrawerOpen(false);
-    setNewPassword({ website: '', username: '', password: '' });
+    try {
+      const sessionToken = localStorage.getItem("sessionToken");
+      if (!sessionToken) {
+        toast.error("Authentication required");
+        return;
+      }
+
+      const { userId } = await verifyToken(sessionToken);
+
+      // Check for duplicate entry
+      const isDuplicate = await checkDuplicateEntry(
+        userId,
+        newEntry.website,
+        newEntry.username
+      );
+      if (isDuplicate) {
+        toast.error("An entry for this website and username already exists");
+        setLoading(false);
+        return;
+      }
+
+      // Derive key and encrypt the password
+      const key = await deriveKey(newEntry.masterPassword);
+      const { cipherText, iv } = await encryptAESGCM(newEntry.password, key);
+      const encryptedData = JSON.stringify({ cipherText, iv });
+
+      await addVaultEntry(
+        userId,
+        newEntry.website,
+        newEntry.username,
+        encryptedData
+      );
+
+      await logActivity(userId, `Added new entry for ${newEntry.website}`);
+
+      toast.success("Password added successfully");
+      setIsDrawerOpen(false);
+      setNewEntry({
+        website: "",
+        username: "",
+        password: "",
+        masterPassword: "",
+      });
+      loadEntries();
+    } catch (error) {
+      toast.error("Failed to add password");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleView(entry: VaultEntry) {
+    setSelectedEntry(entry);
+    setIsViewing(true);
+    setDecryptedPassword("");
+    setShowPassword(false);
+  }
+
+  async function handleDecrypt(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedEntry || !newEntry.masterPassword) return;
+
+    try {
+      const { cipherText, iv } = JSON.parse(selectedEntry.encrypted_password);
+      const key = await deriveKey(newEntry.masterPassword);
+      const decrypted = await decryptAESGCM(cipherText, iv, key);
+      setDecryptedPassword(decrypted);
+
+      const sessionToken = localStorage.getItem("sessionToken");
+      if (sessionToken) {
+        try {
+          const { userId } = await verifyToken(sessionToken);
+          await logActivity(
+            userId,
+            `Viewed password for ${selectedEntry.website}`
+          );
+        } catch (error) {
+          console.error("Authentication error:", error);
+        }
+      }
+    } catch (error) {
+      toast.error(
+        "Failed to decrypt password. Please check your master password."
+      );
+    }
+  }
+
+  async function handleEdit(entry: VaultEntry) {
+    setSelectedEntry(entry);
+    setIsEditing(true);
+    setNewEntry({
+      website: entry.website,
+      username: entry.username,
+      password: "",
+      masterPassword: "",
+    });
+  }
+
+  async function handleUpdate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedEntry) return;
+    setLoading(true);
+
+    try {
+      const key = await deriveKey(newEntry.masterPassword);
+      const { cipherText, iv } = await encryptAESGCM(newEntry.password, key);
+      const encryptedData = JSON.stringify({ cipherText, iv });
+
+      await updateVaultEntry(selectedEntry.id, encryptedData);
+
+      const sessionToken = localStorage.getItem("sessionToken");
+      if (sessionToken) {
+        try {
+          const { userId } = await verifyToken(sessionToken);
+          await logActivity(
+            userId,
+            `Updated password for ${selectedEntry.website}`
+          );
+        } catch (error) {
+          console.error("Authentication error:", error);
+        }
+      }
+
+      toast.success("Password updated successfully");
+      setIsEditing(false);
+      setSelectedEntry(null);
+      setNewEntry({
+        website: "",
+        username: "",
+        password: "",
+        masterPassword: "",
+      });
+      loadEntries();
+    } catch (error) {
+      toast.error("Failed to update password");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(entry: VaultEntry) {
+    if (!confirm("Are you sure you want to delete this entry?")) return;
+    setLoading(true);
+
+    try {
+      await deleteVaultEntry(entry.id);
+
+      const sessionToken = localStorage.getItem("sessionToken");
+      if (sessionToken) {
+        try {
+          const { userId } = await verifyToken(sessionToken);
+          await logActivity(userId, `Deleted entry for ${entry.website}`);
+        } catch (error) {
+          console.error("Authentication error:", error);
+        }
+      }
+
+      toast.success("Password deleted successfully");
+      loadEntries();
+    } catch (error) {
+      toast.error("Failed to delete password");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard");
   };
 
-  return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Password Vault</h1>
-          <Link 
-            href="/dashboard"
-            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
-          >
-            Back to Dashboard
-          </Link>
-        </div>
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
 
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="p-6">
-            <div className="flex justify-end mb-4">
-              <button 
-                onClick={() => setIsDrawerOpen(true)}
-                className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors"
-              >
-                Add New Password
-              </button>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Website</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Password</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {dummyVault.map((entry) => (
-                    <tr key={entry.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.website}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.username}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.password}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.createdAt}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <button className="text-blue-600 hover:text-blue-800 mr-3">View</button>
-                        <button className="text-green-600 hover:text-green-800 mr-3">Edit</button>
-                        <button className="text-red-600 hover:text-red-800">Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+  return (
+    <AuthCheck>
+      <div className="min-h-screen bg-gray-100 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900">Password Vault</h1>
+            <Link
+              href="/dashboard"
+              className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
+
+          <div className="bg-white shadow rounded-lg overflow-hidden">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex-1 max-w-md">
+                  <input
+                    type="text"
+                    placeholder="Search by website or username..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <button
+                  onClick={() => setIsDrawerOpen(true)}
+                  className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors ml-4"
+                >
+                  Add New Password
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {filteredEntries.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-gray-400 text-6xl mb-4">🔒</div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      {searchTerm
+                        ? "No entries found"
+                        : "No passwords stored yet"}
+                    </h3>
+                    <p className="text-gray-500">
+                      {searchTerm
+                        ? "Try adjusting your search terms."
+                        : "Add your first password to get started."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredEntries.map((entry) => (
+                      <VaultEntry
+                        key={entry.id}
+                        entry={entry}
+                        onView={handleView}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Drawer Modal */}
-      {isDrawerOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
-          <div className="fixed inset-y-0 right-0 max-w-md w-full bg-white shadow-xl">
-            <div className="h-full flex flex-col">
-              <div className="px-6 py-4 border-b">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold">Add New Password</h2>
-                  <button 
-                    onClick={() => setIsDrawerOpen(false)}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+        {/* Add New Password Drawer */}
+        {isDrawerOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
+            <div className="fixed inset-y-0 right-0 max-w-md w-full bg-white shadow-xl">
+              <div className="h-full flex flex-col">
+                <div className="px-6 py-4 border-b">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-semibold">Add New Password</h2>
+                    <button
+                      onClick={() => {
+                        setIsDrawerOpen(false);
+                        setNewEntry({
+                          website: "",
+                          username: "",
+                          password: "",
+                          masterPassword: "",
+                        });
+                      }}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
+
+                <form
+                  onSubmit={handleAdd}
+                  className="flex-1 overflow-y-auto p-6"
+                >
+                  <div className="space-y-4">
+                    <div>
+                      <label
+                        htmlFor="website"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Website
+                      </label>
+                      <input
+                        type="text"
+                        id="website"
+                        required
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        value={newEntry.website}
+                        onChange={(e) =>
+                          setNewEntry({ ...newEntry, website: e.target.value })
+                        }
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="username"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Username
+                      </label>
+                      <input
+                        type="text"
+                        id="username"
+                        required
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        value={newEntry.username}
+                        onChange={(e) =>
+                          setNewEntry({ ...newEntry, username: e.target.value })
+                        }
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="password"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Password
+                      </label>
+                      <div className="mt-1 flex space-x-2">
+                        <input
+                          type="password"
+                          id="password"
+                          required
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          value={newEntry.password}
+                          onChange={(e) =>
+                            setNewEntry({
+                              ...newEntry,
+                              password: e.target.value,
+                            })
+                          }
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNewEntry({
+                              ...newEntry,
+                              password: generatePassword(),
+                            })
+                          }
+                          className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                        >
+                          Generate
+                        </button>
+                      </div>
+                      {newEntry.password && (
+                        <div className="mt-1 flex items-center space-x-2">
+                          <span className="text-xs text-gray-500">
+                            Strength:
+                          </span>
+                          <span
+                            className={`text-xs font-medium ${
+                              checkPasswordStrength(newEntry.password).color
+                            }`}
+                          >
+                            {checkPasswordStrength(newEntry.password).label}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="masterPassword"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Master Password
+                      </label>
+                      <input
+                        type="password"
+                        id="masterPassword"
+                        required
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        value={newEntry.masterPassword}
+                        onChange={(e) =>
+                          setNewEntry({
+                            ...newEntry,
+                            masterPassword: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50"
+                    >
+                      {loading ? <LoadingSpinner /> : "Save Password"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* View Password Modal */}
+        {isViewing && selectedEntry && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">View Password</h2>
+                <button
+                  onClick={() => {
+                    setIsViewing(false);
+                    setSelectedEntry(null);
+                    setDecryptedPassword("");
+                    setShowPassword(false);
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
-                <div className="space-y-4">
-                  <div>
-                    <label htmlFor="website" className="block text-sm font-medium text-gray-700">
-                      Website
-                    </label>
-                    <input
-                      type="text"
-                      id="website"
-                      required
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      value={newPassword.website}
-                      onChange={(e) => setNewPassword({...newPassword, website: e.target.value})}
-                    />
-                  </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Website
+                  </label>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {selectedEntry.website}
+                  </p>
+                </div>
 
-                  <div>
-                    <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                      Username
-                    </label>
-                    <input
-                      type="text"
-                      id="username"
-                      required
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      value={newPassword.username}
-                      onChange={(e) => setNewPassword({...newPassword, username: e.target.value})}
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Username
+                  </label>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {selectedEntry.username}
+                  </p>
+                </div>
 
-                  <div>
-                    <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                      Password
-                    </label>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Password
+                  </label>
+                  <div className="mt-1 relative">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        readOnly
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50"
+                        value={decryptedPassword || "••••••••"}
+                      />
+                      {decryptedPassword && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
+                          >
+                            {showPassword ? "Hide" : "Show"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(decryptedPassword)}
+                            className="px-3 py-2 text-sm text-blue-600 hover:text-blue-800"
+                          >
+                            Copy
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    {!decryptedPassword && (
+                      <form onSubmit={handleDecrypt} className="mt-2 space-y-2">
+                        <input
+                          type="password"
+                          placeholder="Enter master password to decrypt"
+                          className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          value={newEntry.masterPassword}
+                          onChange={(e) =>
+                            setNewEntry({
+                              ...newEntry,
+                              masterPassword: e.target.value,
+                            })
+                          }
+                          required
+                        />
+                        <button
+                          type="submit"
+                          className="w-full bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+                        >
+                          Decrypt Password
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Password Modal */}
+        {isEditing && selectedEntry && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Edit Password</h2>
+                <button
+                  onClick={() => {
+                    setIsEditing(false);
+                    setSelectedEntry(null);
+                    setNewEntry({
+                      website: "",
+                      username: "",
+                      password: "",
+                      masterPassword: "",
+                    });
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdate} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Website
+                  </label>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {selectedEntry.website}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Username
+                  </label>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {selectedEntry.username}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="new-password"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    New Password
+                  </label>
+                  <div className="mt-1 flex space-x-2">
                     <input
                       type="password"
-                      id="password"
+                      id="new-password"
                       required
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      value={newPassword.password}
-                      onChange={(e) => setNewPassword({...newPassword, password: e.target.value})}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      value={newEntry.password}
+                      onChange={(e) =>
+                        setNewEntry({ ...newEntry, password: e.target.value })
+                      }
                     />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setNewEntry({
+                          ...newEntry,
+                          password: generatePassword(),
+                        })
+                      }
+                      className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                    >
+                      Generate
+                    </button>
                   </div>
+                  {newEntry.password && (
+                    <div className="mt-1 flex items-center space-x-2">
+                      <span className="text-xs text-gray-500">Strength:</span>
+                      <span
+                        className={`text-xs font-medium ${
+                          checkPasswordStrength(newEntry.password).color
+                        }`}
+                      >
+                        {checkPasswordStrength(newEntry.password).label}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="mt-6">
-                  <button
-                    type="submit"
-                    className="w-full bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+                <div>
+                  <label
+                    htmlFor="master-password"
+                    className="block text-sm font-medium text-gray-700"
                   >
-                    Save Password
-                  </button>
+                    Master Password
+                  </label>
+                  <input
+                    type="password"
+                    id="master-password"
+                    required
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    value={newEntry.masterPassword}
+                    onChange={(e) =>
+                      setNewEntry({
+                        ...newEntry,
+                        masterPassword: e.target.value,
+                      })
+                    }
+                  />
                 </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50"
+                >
+                  {loading ? <LoadingSpinner /> : "Update Password"}
+                </button>
               </form>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </AuthCheck>
   );
-} 
+}
