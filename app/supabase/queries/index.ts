@@ -118,5 +118,100 @@ export async function checkDuplicateEntry(
     throw new Error(error.message);
   }
 
-  return data !== null; 
+  return data !== null;
+}
+
+// Shamir's Secret Sharing Queries
+
+// Get user's Shamir configuration
+export async function getUserShamirConfig(userId: string) {
+  const { data, error } = await supabase.rpc("get_user_shamir_config", {
+    p_user_id: userId,
+  });
+
+  if (error) {
+    console.error("Error fetching Shamir config:", error);
+    return null;
+  }
+  return data?.[0] || null;
+}
+
+// Get all Shamir shares for a user
+export async function getUserShamirShares(userId: string) {
+  const { data, error } = await supabase
+    .from("shamir_shares")
+    .select("*")
+    .eq("user_id", userId)
+    .order("share_index");
+
+  if (error) {
+    console.error("Error fetching Shamir shares:", error);
+    return [];
+  }
+  return data;
+}
+
+// Validate a share hash
+export async function validateShareHash(
+  userId: string,
+  shareIndex: number,
+  shareHash: string
+) {
+  const { data, error } = await supabase.rpc("validate_share_hash", {
+    p_user_id: userId,
+    p_share_index: shareIndex,
+    p_share_hash: shareHash,
+  });
+
+  if (error) {
+    console.error("Error validating share hash:", error);
+    return false;
+  }
+  return data;
+}
+
+// Get recovery attempts for a user
+export async function getRecoveryAttempts(userId: string, limit: number = 10) {
+  const { data, error } = await supabase
+    .from("recovery_attempts")
+    .select("*")
+    .eq("user_id", userId)
+    .order("attempt_timestamp", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("Error fetching recovery attempts:", error);
+    return [];
+  }
+  return data;
+}
+
+// Get recovery agents for a user
+export async function getRecoveryAgents(userId: string) {
+  const { data, error } = await supabase
+    .from("recovery_agents")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at");
+
+  if (error) {
+    console.error("Error fetching recovery agents:", error);
+    return [];
+  }
+  return data;
+}
+
+// Check if user has Shamir recovery setup
+export async function hasShamirRecovery(userId: string) {
+  const { data, error } = await supabase
+    .from("shamir_shares")
+    .select("id")
+    .eq("user_id", userId)
+    .limit(1);
+
+  if (error) {
+    console.error("Error checking Shamir recovery setup:", error);
+    return false;
+  }
+  return data.length > 0;
 }

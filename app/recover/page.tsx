@@ -1,132 +1,120 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import LoadingSpinner from "../components/LoadingSpinner";
+import ShareInput from "../components/ShareInput";
+import { fetchUserAuthData } from "../supabase/queries";
 
 export default function Recovery() {
-  const [formData, setFormData] = useState({
-    username: '',
-    shares: ['', '', '']
-  });
+  const [email, setEmail] = useState("");
+  const [userId, setUserId] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
+  const [step, setStep] = useState<"email" | "recovery">("email");
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
-    setSuccess(false);
+    setError("");
 
     try {
-      const response = await fetch('/api/auth/recover', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: formData.username,
-          shares: formData.shares.filter(share => share.trim() !== ''),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Recovery failed');
+      const userData = await fetchUserAuthData(email);
+      if (!userData) {
+        throw new Error("User not found");
       }
 
-      setSuccess(true);
-      setTimeout(() => {
-        router.push('/login');
-      }, 2000);
+      setUserId(userData.id);
+      setStep("recovery");
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Failed to find user");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleRecoverySuccess = (recoveredSecret: string) => {
+    // Here you would typically:
+    // 1. Update the user's password with the recovered secret
+    // 2. Log the user in
+    // 3. Redirect to dashboard
+
+    setSuccess(true);
+    setTimeout(() => {
+      router.push("/login");
+    }, 2000);
+  };
+
+  const setSuccess = (success: boolean) => {
+    // This is just for the success message display
+  };
+
+  if (step === "recovery" && userId) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
+        <ShareInput userId={userId} onRecoverySuccess={handleRecoverySuccess} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
       <div className="w-full max-w-md space-y-8 bg-white p-8 rounded-lg shadow-md">
         <div>
           <h2 className="text-3xl font-bold text-center">Account Recovery</h2>
-          <p className="mt-2 text-center text-gray-600">Enter your recovery shares to regain access</p>
+          <p className="mt-2 text-center text-gray-600">
+            Enter your email to begin the recovery process
+          </p>
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded relative" role="alert">
+          <div
+            className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded relative"
+            role="alert"
+          >
             <span className="block sm:inline">{error}</span>
           </div>
         )}
 
-        {success && (
-          <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded relative" role="alert">
-            <span className="block sm:inline">Account recovered successfully! Redirecting to login...</span>
-          </div>
-        )}
-
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                Username
-              </label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                value={formData.username}
-                onChange={(e) => setFormData({...formData, username: e.target.value})}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Recovery Shares
-              </label>
-              {formData.shares.map((share, index) => (
-                <input
-                  key={index}
-                  type="text"
-                  required
-                  placeholder={`Share ${index + 1}`}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  value={share}
-                  onChange={(e) => {
-                    const newShares = [...formData.shares];
-                    newShares[index] = e.target.value;
-                    setFormData({...formData, shares: newShares});
-                  }}
-                  disabled={loading}
-                />
-              ))}
-            </div>
-          </div>
-
+        <form className="mt-8 space-y-6" onSubmit={handleEmailSubmit}>
           <div>
-            <button
-              type="submit"
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading}
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-700"
             >
-              {loading ? <LoadingSpinner /> : 'Recover Account'}
-            </button>
+              Email Address
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              required
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+            />
           </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            {loading ? <LoadingSpinner /> : "Continue to Recovery"}
+          </button>
         </form>
 
-        <div className="text-center mt-4">
-          <a href="/login" className="text-sm text-blue-600 hover:text-blue-500">
-            Remember your password? Login
-          </a>
+        <div className="text-center">
+          <button
+            onClick={() => router.push("/login")}
+            className="text-blue-600 hover:text-blue-800 text-sm"
+          >
+            Back to Login
+          </button>
         </div>
       </div>
     </div>
   );
-} 
+}
