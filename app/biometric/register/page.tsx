@@ -68,7 +68,11 @@ export default function BiometricRegister() {
         pubKeyCredParams: [
           {
             type: "public-key",
-            alg: -7, // ES256
+            alg: -7, // ES256 algorithm
+          },
+          {
+            type: "public-key",
+            alg: -257, // RS256 algorithm
           },
         ],
         authenticatorSelection: {
