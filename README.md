@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ZK Password Manager
 
-## Getting Started
+A zero-knowledge password manager with biometric authentication and Shamir's Secret Sharing recovery.
 
-First, run the development server:
+## Features
+
+- Zero-knowledge password storage
+- Biometric authentication (WebAuthn)
+- Shamir's Secret Sharing for account recovery
+- Brute force protection
+- Activity logging
+
+## Database Setup
+
+This project uses MongoDB instead of Supabase. Follow these steps to set up:
+
+### 1. Install MongoDB
+
+**macOS:**
+
+```bash
+brew install mongodb-community
+```
+
+**Ubuntu/Debian:**
+
+```bash
+sudo apt-get install mongodb
+```
+
+**Windows:**
+Download from [mongodb.com](https://www.mongodb.com/try/download/community)
+
+### 2. Start MongoDB
+
+```bash
+# Start MongoDB service
+mongod
+```
+
+### 3. Environment Variables
+
+Create a `.env.local` file in the project root:
+
+```env
+# MongoDB Configuration
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DB_NAME=zk-password-manager
+
+# JWT Secret (uses existing implementation)
+NEXT_PUBLIC_JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+```
+
+### 4. Install Dependencies
+
+```bash
+npm install
+```
+
+### 5. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Collections
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The MongoDB database will automatically create these collections:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `users` - User authentication and profile data
+- `password_entries` - Encrypted password vault entries
+- `vaults` - Encrypted vault data
+- `activity_logs` - User activity tracking
+- `recovery_shares` - Recovery share data
+- `shamir_shares` - Shamir secret sharing metadata
+- `recovery_attempts` - Recovery attempt logging
+- `recovery_agents` - Trusted recovery contacts
 
-## Learn More
+## Authentication
 
-To learn more about Next.js, take a look at the following resources:
+Uses custom JWT implementation with Web Crypto API for secure token generation and verification.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Security Features
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Zero-knowledge architecture
+- Biometric authentication via WebAuthn
+- Shamir's Secret Sharing for account recovery
+- Brute force protection with account locking
+- Activity logging and monitoring

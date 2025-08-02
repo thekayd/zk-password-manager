@@ -7,8 +7,6 @@ import {
   validateShares,
   reconstructSecret,
 } from "../lib/shamir";
-import { getUserShamirConfig, validateShareHash } from "../supabase/queries";
-import { logRecoveryAttempt } from "../supabase/mutations";
 
 interface ShareInputProps {
   userId: string;
@@ -28,14 +26,24 @@ export default function ShareInput({
     required_shares: number;
   } | null>(null);
 
-  // Load user's Shamir configuration
+  // This loads the user's Shamir configuration
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const userConfig = await getUserShamirConfig(userId);
+        const response = await fetch("/api/shamir/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch Shamir config");
+        }
+
+        const { config: userConfig } = await response.json();
         if (userConfig) {
           setConfig(userConfig);
-          // Initialize shares array with the correct size
+          // the userconfig then sets the   shares array with the correct size
           setShares(new Array(userConfig.total_shares).fill(""));
         }
       } catch (err) {
@@ -74,7 +82,7 @@ export default function ShareInput({
         );
       }
 
-      // Decode and validate shares
+      // This const then decodes and validates shares
       const decodedShares: Share[] = [];
       for (const encodedShare of nonEmptyShares) {
         try {
@@ -87,48 +95,66 @@ export default function ShareInput({
         }
       }
 
-      // Validate share integrity
+      // This validates share integrity
       if (!validateShares(decodedShares)) {
         throw new Error("Invalid or corrupted shares detected");
       }
 
-      // Validate shares against database hashes
+      // This validates shares against database hashes
       for (const share of decodedShares) {
-        const isValid = await validateShareHash(
-          userId,
-          share.id,
-          share.checksum
-        );
+        const validateResponse = await fetch("/api/shamir/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            shareIndex: share.id,
+            shareHash: share.checksum,
+          }),
+        });
+
+        if (!validateResponse.ok) {
+          throw new Error("Failed to validate share");
+        }
+
+        const { isValid } = await validateResponse.json();
         if (!isValid) {
           throw new Error(`Share ${share.id} validation failed`);
         }
       }
 
-      // Reconstruct the secret
+      // This then reconstructs the secret
       const recoveredSecret = reconstructSecret(decodedShares);
 
-      // Log successful recovery attempt
-      await logRecoveryAttempt(
-        userId,
-        true,
-        decodedShares.length,
-        config.required_shares
-      );
+      // This then logs the successful recovery attempt
+      await fetch("/api/shamir/recovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          success: true,
+          sharesUsed: decodedShares.length,
+          requiredShares: config.required_shares,
+        }),
+      });
 
       setSuccess(true);
       onRecoverySuccess(recoveredSecret);
     } catch (err: any) {
       setError(err.message);
 
-      // Log failed recovery attempt
+      // thislogs failed recovery attempt
       if (config) {
         try {
-          await logRecoveryAttempt(
-            userId,
-            false,
-            shares.filter((s) => s.trim() !== "").length,
-            config.required_shares
-          );
+          await fetch("/api/shamir/recovery", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId,
+              success: false,
+              sharesUsed: shares.filter((s) => s.trim() !== "").length,
+              requiredShares: config.required_shares,
+            }),
+          });
         } catch (logErr) {
           console.error("Error logging recovery attempt:", logErr);
         }

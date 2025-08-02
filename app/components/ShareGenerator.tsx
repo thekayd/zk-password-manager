@@ -8,7 +8,7 @@ import {
   ShamirConfig,
   generateShareHash,
 } from "../lib/shamir";
-import { saveShamirShares } from "../supabase/mutations";
+import { saveShamirShares } from "../mongodb/mutations";
 
 interface ShareGeneratorProps {
   userId: string;

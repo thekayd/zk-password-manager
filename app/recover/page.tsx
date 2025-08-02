@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import LoadingSpinner from "../components/LoadingSpinner";
 import ShareInput from "../components/ShareInput";
-import { fetchUserAuthData } from "../supabase/queries";
 
 export default function Recovery() {
   const [email, setEmail] = useState("");
@@ -20,7 +19,17 @@ export default function Recovery() {
     setError("");
 
     try {
-      const userData = await fetchUserAuthData(email);
+      const userResponse = await fetch("/api/auth/user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!userResponse.ok) {
+        throw new Error("User not found");
+      }
+
+      const { user: userData } = await userResponse.json();
       if (!userData) {
         throw new Error("User not found");
       }

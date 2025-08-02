@@ -10,16 +10,6 @@ import AuthCheck from "../components/AuthCheck";
 import { encryptAESGCM, decryptAESGCM, deriveKey } from "../lib/crypto";
 import { checkPasswordStrength, generatePassword } from "../lib/utils";
 import { verifyToken } from "../lib/jwt";
-import {
-  addVaultEntry,
-  deleteVaultEntry,
-  updateVaultEntry,
-  logActivity,
-} from "../supabase/mutations/index";
-import {
-  getVaultEntries,
-  checkDuplicateEntry,
-} from "../supabase/queries/index";
 
 interface VaultEntry {
   id: string;
@@ -81,7 +71,11 @@ export default function VaultPage() {
         return;
       }
       const { userId } = await verifyToken(sessionToken);
-      const data = await getVaultEntries(userId);
+      const response = await fetch(`/api/vault/entries?userId=${userId}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch entries");
+      }
+      const { entries: data } = await response.json();
       setEntries(data);
       setFilteredEntries(data);
     } catch (error) {
@@ -104,31 +98,27 @@ export default function VaultPage() {
 
       const { userId } = await verifyToken(sessionToken);
 
-      // Check for duplicate entry
-      const isDuplicate = await checkDuplicateEntry(
-        userId,
-        newEntry.website,
-        newEntry.username
-      );
-      if (isDuplicate) {
-        toast.error("An entry for this website and username already exists");
-        setLoading(false);
-        return;
-      }
-
       // Derive key and encrypt the password
       const key = await deriveKey(newEntry.masterPassword);
       const { cipherText, iv } = await encryptAESGCM(newEntry.password, key);
       const encryptedData = JSON.stringify({ cipherText, iv });
 
-      await addVaultEntry(
-        userId,
-        newEntry.website,
-        newEntry.username,
-        encryptedData
-      );
+      const response = await fetch("/api/vault/entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          website: newEntry.website,
+          username: newEntry.username,
+          encryptedPassword: encryptedData,
+        }),
+      });
 
-      await logActivity(userId, `Added new entry for ${newEntry.website}`);
+      if (!response.ok) {
+        const error = await response.json();
+        toast.error(error.error || "Failed to add password");
+        return;
+      }
 
       toast.success("Password added successfully");
       setIsDrawerOpen(false);
@@ -167,10 +157,7 @@ export default function VaultPage() {
       if (sessionToken) {
         try {
           const { userId } = await verifyToken(sessionToken);
-          await logActivity(
-            userId,
-            `Viewed password for ${selectedEntry.website}`
-          );
+          // Activity logging is handled by the API
         } catch (error) {
           console.error("Authentication error:", error);
         }
@@ -203,19 +190,19 @@ export default function VaultPage() {
       const { cipherText, iv } = await encryptAESGCM(newEntry.password, key);
       const encryptedData = JSON.stringify({ cipherText, iv });
 
-      await updateVaultEntry(selectedEntry.id, encryptedData);
+      const response = await fetch("/api/vault/entries", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedEntry.id,
+          encryptedPassword: encryptedData,
+        }),
+      });
 
-      const sessionToken = localStorage.getItem("sessionToken");
-      if (sessionToken) {
-        try {
-          const { userId } = await verifyToken(sessionToken);
-          await logActivity(
-            userId,
-            `Updated password for ${selectedEntry.website}`
-          );
-        } catch (error) {
-          console.error("Authentication error:", error);
-        }
+      if (!response.ok) {
+        const error = await response.json();
+        toast.error(error.error || "Failed to update password");
+        return;
       }
 
       toast.success("Password updated successfully");
@@ -240,16 +227,14 @@ export default function VaultPage() {
     setLoading(true);
 
     try {
-      await deleteVaultEntry(entry.id);
+      const response = await fetch(`/api/vault/entries?id=${entry.id}`, {
+        method: "DELETE",
+      });
 
-      const sessionToken = localStorage.getItem("sessionToken");
-      if (sessionToken) {
-        try {
-          const { userId } = await verifyToken(sessionToken);
-          await logActivity(userId, `Deleted entry for ${entry.website}`);
-        } catch (error) {
-          console.error("Authentication error:", error);
-        }
+      if (!response.ok) {
+        const error = await response.json();
+        toast.error(error.error || "Failed to delete password");
+        return;
       }
 
       toast.success("Password deleted successfully");

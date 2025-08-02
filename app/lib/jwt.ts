@@ -10,7 +10,7 @@ export async function generateToken(userId: string): Promise<string> {
   const payload = {
     userId,
     iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 60 * 60, // 1 hour timestamp for jwt
+    exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours timestamp for jwt
   };
 
   const encodedHeader = btoa(JSON.stringify(header));
@@ -71,8 +71,20 @@ export async function verifyToken(token: string): Promise<{ userId: string }> {
 
     const payload = JSON.parse(atob(encodedPayload));
 
+    // Debug token expiration
+    const currentTime = Math.floor(Date.now() / 1000);
+    const timeUntilExpiry = payload.exp - currentTime;
+    console.log("Token expiration check:", {
+      currentTime,
+      tokenExpiry: payload.exp,
+      timeUntilExpiry: timeUntilExpiry,
+      expiresIn: `${Math.floor(timeUntilExpiry / 3600)} hours ${Math.floor(
+        (timeUntilExpiry % 3600) / 60
+      )} minutes`,
+    });
+
     // This if statement then checks the expiration
-    if (payload.exp < Math.floor(Date.now() / 1000)) {
+    if (payload.exp < currentTime) {
       throw new Error("Token has expired");
     }
 

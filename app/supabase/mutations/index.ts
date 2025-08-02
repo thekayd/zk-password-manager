@@ -122,30 +122,41 @@ export async function createUserRecord(
   userId: string
 ) {
   console.log("Creating user record with:", { email, userId });
-  const { error } = await supabase.from("users").insert([
-    {
-      id: userId,
-      email: email,
-      password_hash: passwordHash,
-      failed_attempts: 0,
-      challenge: null,
-      locked_until: null,
-      webauthn_id: null,
-      webauthn_public_key: null,
-    },
-  ]);
 
-  if (error) {
-    console.error("Error creating user record:", {
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      code: error.code,
+  try {
+    const { data, error } = await supabase.from("users").insert([
+      {
+        id: userId,
+        email: email,
+        password_hash: passwordHash,
+        failed_attempts: 0,
+        challenge: null,
+        locked_until: null,
+        webauthn_id: null,
+        webauthn_public_key: null,
+      },
+    ]);
+
+    if (error) {
+      console.error("Error creating user record:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
+      throw new Error(`Database error: ${error.message}`);
+    }
+
+    console.log("User record created successfully:", data);
+    return true;
+  } catch (err: any) {
+    console.error("Exception in createUserRecord:", {
+      message: err.message,
+      stack: err.stack,
+      name: err.name,
     });
-    return false;
+    throw err;
   }
-  console.log("User record created successfully");
-  return true;
 }
 
 // This locks user out for 10 minutes, this allows for extra security
