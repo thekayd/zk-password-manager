@@ -28,6 +28,13 @@ export async function POST(request: NextRequest) {
     );
 
     if (!isValid) {
+      // logs failed login attempt
+      await db.collection("activity_logs").insertOne({
+        user_id: user.id,
+        activity: "Failed login attempt",
+        timestamp: new Date(),
+      });
+
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
@@ -35,6 +42,13 @@ export async function POST(request: NextRequest) {
     }
 
     const token = await generateToken(user.id);
+
+    // logs successful login activity
+    await db.collection("activity_logs").insertOne({
+      user_id: user.id,
+      activity: "User logged in successfully",
+      timestamp: new Date(),
+    });
 
     console.log(
       "Login successful for user:",

@@ -9,11 +9,14 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     try {
-      // calls the logout API
+      const token = localStorage.getItem("sessionToken");
+
+      // calls the logout API with authorization header
       const response = await fetch("/api/auth/logout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
       });
 

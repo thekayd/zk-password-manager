@@ -54,6 +54,13 @@ export async function POST(request: NextRequest) {
 
     await db.collection("shamir_shares").insertMany(shareData);
 
+    // logs successful registration activity
+    await db.collection("activity_logs").insertOne({
+      user_id: userId,
+      activity: "User registered successfully",
+      timestamp: new Date(),
+    });
+
     return NextResponse.json({
       success: true,
       userId,

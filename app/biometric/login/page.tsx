@@ -79,9 +79,22 @@ export default function BiometricLogin() {
         return;
       }
 
-      // then generates the token and login
-      const token = await generateToken(biometricId.id);
-      localStorage.setItem("sessionToken", token);
+      // calls the biometric login API to log activity and get token
+      const loginResponse = await fetch("/api/auth/biometric-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          userId: biometricId.id,
+        }),
+      });
+
+      if (!loginResponse.ok) {
+        throw new Error("Biometric login failed");
+      }
+
+      const loginResult = await loginResponse.json();
+      localStorage.setItem("sessionToken", loginResult.token);
 
       toast.success("Biometric authentication successful! ✅");
       router.push("/dashboard");
