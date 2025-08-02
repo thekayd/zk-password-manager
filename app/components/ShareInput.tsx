@@ -40,14 +40,22 @@ export default function ShareInput({
           throw new Error("Failed to fetch Shamir config");
         }
 
-        const { config: userConfig } = await response.json();
+        const { config: userConfig, needsSetup } = await response.json();
         if (userConfig) {
           setConfig(userConfig);
           // the userconfig then sets the   shares array with the correct size
           setShares(new Array(userConfig.total_shares).fill(""));
+
+          // if setup is needed for the shares, it shows a message but there is no way to set it up yet
+          if (needsSetup) {
+            setError(
+              "Shamir recovery shares have not been set up yet. Please set up recovery shares first."
+            );
+          }
         }
       } catch (err) {
         console.error("Error loading Shamir config:", err);
+        setError("Failed to load recovery configuration");
       }
     };
     loadConfig();
@@ -67,6 +75,7 @@ export default function ShareInput({
     try {
       // Filter out empty shares
       const nonEmptyShares = shares.filter((share) => share.trim() !== "");
+      console.log("Non-empty shares count:", nonEmptyShares.length);
 
       if (nonEmptyShares.length < 2) {
         throw new Error("At least 2 shares are required");
@@ -82,26 +91,48 @@ export default function ShareInput({
         );
       }
 
+      console.log("Starting share validation and reconstruction...");
+
       // This const then decodes and validates shares
       const decodedShares: Share[] = [];
-      for (const encodedShare of nonEmptyShares) {
+      for (let i = 0; i < nonEmptyShares.length; i++) {
+        const encodedShare = nonEmptyShares[i];
+        console.log(
+          `Decoding share ${i + 1}:`,
+          encodedShare.substring(0, 50) + "..."
+        );
+
         try {
           const share = decodeShare(encodedShare);
+          console.log(`Share ${i + 1} decoded successfully:`, {
+            id: share.id,
+            valueLength: share.value.length,
+            checksum: share.checksum,
+          });
           decodedShares.push(share);
         } catch (err) {
+          console.error(`Error decoding share ${i + 1}:`, err);
           throw new Error(
             `Invalid share format: ${encodedShare.substring(0, 20)}...`
           );
         }
       }
 
+      console.log(`Successfully decoded ${decodedShares.length} shares`);
+
       // This validates share integrity
+      console.log("Validating share integrity...");
       if (!validateShares(decodedShares)) {
+        console.error("Share validation failed");
         throw new Error("Invalid or corrupted shares detected");
       }
+      console.log("Share validation passed");
 
       // This validates shares against database hashes
+      console.log("Validating shares against database...");
       for (const share of decodedShares) {
+        console.log(`Validating share ${share.id} against database...`);
+
         const validateResponse = await fetch("/api/shamir/validate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -113,17 +144,26 @@ export default function ShareInput({
         });
 
         if (!validateResponse.ok) {
+          console.error(`Share ${share.id} database validation failed`);
           throw new Error("Failed to validate share");
         }
 
         const { isValid } = await validateResponse.json();
         if (!isValid) {
+          console.error(`Share ${share.id} database validation returned false`);
           throw new Error(`Share ${share.id} validation failed`);
         }
+
+        console.log(`Share ${share.id} database validation passed`);
       }
 
       // This then reconstructs the secret
+      console.log("Reconstructing secret...");
       const recoveredSecret = reconstructSecret(decodedShares);
+      console.log(
+        "Secret reconstruction successful, length:",
+        recoveredSecret.length
+      );
 
       // This then logs the successful recovery attempt
       await fetch("/api/shamir/recovery", {
@@ -140,6 +180,7 @@ export default function ShareInput({
       setSuccess(true);
       onRecoverySuccess(recoveredSecret);
     } catch (err: any) {
+      console.error("Recovery error:", err);
       setError(err.message);
 
       // thislogs failed recovery attempt

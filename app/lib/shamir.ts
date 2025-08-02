@@ -70,18 +70,29 @@ function createShares(secret: string, config: ShamirConfig): Share[] {
 
 // Reconstructs the secret from shares
 function reconstructFromShares(shares: Share[]): string {
+  console.log(`Reconstructing from ${shares.length} shares`);
+
   if (shares.length < 2) {
     throw new Error("At least 2 shares are required");
   }
 
-  // Uses the first share to reconstruct
-  const firstShare = shares[0];
-
   try {
+    // uses the the first share to reconstruct the secret
+    // all the shares should reconstruct to the same secret
+    const firstShare = shares[0];
+    console.log("Using first share for reconstruction:", firstShare.id);
+
     const shareData = JSON.parse(atob(firstShare.value));
+    console.log("Decoded share data:", {
+      hasValue: !!shareData.value,
+      hasKey: !!shareData.key,
+      valueLength: shareData.value?.length,
+      keyLength: shareData.key?.length,
+    });
+
     const { value: shareValue, key: randomKey } = shareData;
 
-    // XORs back to get the original secret
+    // XOR the share value with the key to get back the original secret
     let secret = "";
     for (let i = 0; i < shareValue.length; i++) {
       const shareChar = shareValue.charCodeAt(i);
@@ -90,20 +101,72 @@ function reconstructFromShares(shares: Share[]): string {
       secret += String.fromCharCode(originalChar);
     }
 
+    console.log(
+      "Reconstructed secret from first share, length:",
+      secret.length
+    );
+
+    // verifies that all other shares reconstruct to the same secret
+    for (let i = 1; i < shares.length; i++) {
+      const share = shares[i];
+      console.log(`Verifying share ${share.id}...`);
+
+      const shareData = JSON.parse(atob(share.value));
+      const { value: shareValue, key: randomKey } = shareData;
+
+      let reconstructedSecret = "";
+      for (let j = 0; j < shareValue.length; j++) {
+        const shareChar = shareValue.charCodeAt(j);
+        const keyChar = randomKey.charCodeAt(j);
+        const originalChar = shareChar ^ keyChar;
+        reconstructedSecret += String.fromCharCode(originalChar);
+      }
+
+      console.log(
+        `Share ${share.id} reconstructed secret length:`,
+        reconstructedSecret.length
+      );
+
+      if (reconstructedSecret !== secret) {
+        console.error("Share verification failed - secrets don't match");
+        throw new Error("Shares do not reconstruct to the same secret");
+      }
+
+      console.log(`Share ${share.id} verification passed`);
+    }
+
+    console.log("All shares verified successfully");
     return secret;
   } catch (error) {
+    console.error("Error in reconstructFromShares:", error);
     throw new Error("Invalid share format");
   }
 }
 
 // Validates a share
 function validateShare(share: Share): boolean {
+  console.log(`Validating share ${share.id}:`, {
+    value: share.value.substring(0, 50) + "...",
+    checksum: share.checksum,
+  });
+
   const expectedChecksum = simpleHash(share.value);
-  return share.checksum === expectedChecksum;
+  const isValid = share.checksum === expectedChecksum;
+
+  console.log(`Share ${share.id} validation:`, {
+    expectedChecksum,
+    actualChecksum: share.checksum,
+    isValid,
+  });
+
+  return isValid;
 }
 
 // Generates shares
 export function generateShares(secret: string, config: ShamirConfig): Share[] {
+  console.log("Generating shares with config:", config);
+  console.log("Secret length:", secret.length);
+
   if (config.requiredShares > config.totalShares) {
     throw new Error("Required shares cannot be greater than total shares");
   }
@@ -112,19 +175,31 @@ export function generateShares(secret: string, config: ShamirConfig): Share[] {
     throw new Error("At least 2 shares are required");
   }
 
-  return createShares(secret, config);
+  const shares = createShares(secret, config);
+  console.log(`Generated ${shares.length} shares`);
+
+  return shares;
 }
 
 // Reconstructs the secret
 export function reconstructSecret(shares: Share[]): string {
+  console.log(`Attempting to reconstruct secret from ${shares.length} shares`);
+
   // Validates all shares first
   for (const share of shares) {
+    console.log(`Validating share ${share.id}...`);
     if (!validateShare(share)) {
+      console.error(`Share ${share.id} validation failed`);
       throw new Error(`Invalid share ${share.id}`);
     }
+    console.log(`Share ${share.id} validation passed`);
   }
 
-  return reconstructFromShares(shares);
+  console.log("All shares validated, reconstructing secret...");
+  const secret = reconstructFromShares(shares);
+  console.log("Secret reconstruction completed, length:", secret.length);
+
+  return secret;
 }
 
 // Encodes share for storage/transmission
