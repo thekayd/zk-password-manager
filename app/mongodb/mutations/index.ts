@@ -383,8 +383,18 @@ export async function authenticateUser(email: string, password: string) {
       return null;
     }
 
-    // For now, we'll use the password hash directly since it's already derived
-    // In a real implementation, you'd want to hash the password and compare
+    // Verifies the password using ZKP proof validation
+    const { validateProof } = await import("@/app/lib/zkp");
+    const isValid = await validateProof(
+      user.password_hash,
+      password, // client-generated proof
+      user.challenge || ""
+    );
+
+    if (!isValid) {
+      return null;
+    }
+
     const token = await generateToken(user.id);
 
     return { user, token };

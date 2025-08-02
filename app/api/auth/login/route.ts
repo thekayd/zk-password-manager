@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/app/lib/mongodbClient";
 import { generateToken } from "@/app/lib/jwt";
+import { validateProof } from "@/app/lib/zkp";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,8 +17,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For now, we'll accept any password for the user
-    // In a real implementation, you'd want to hash the password and compare with user.password_hash
+    // Verifies the password using ZKP proof validation
+    const isValid = await validateProof(
+      user.password_hash,
+      password, // client-generated proof
+      user.challenge || ""
+    );
+
+    if (!isValid) {
+      return NextResponse.json(
+        { error: "Invalid credentials" },
+        { status: 401 }
+      );
+    }
+
     const token = await generateToken(user.id);
 
     console.log(
