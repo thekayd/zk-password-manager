@@ -169,69 +169,19 @@ function LoginContent() {
       const authResult = await authResponse.json();
       console.log("MongoDB auth successful, using API token...");
 
-      // A ZKP proof is then generated and stored
-      console.log("Generating ZKP proof...");
-      const clientProof = await generateProof(
-        formData.password,
-        userData.challenge
-      );
+      // resets failed attempts on successful login
+      await fetch("/api/auth/attempts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: formData.email, action: "reset" }),
+      });
 
-      // This vaidates proof
-      console.log("Validating ZKP proof...");
-      const isValid = await validateProof(
-        userData.password_hash,
-        clientProof,
-        userData.challenge
-      );
+      // Use the token from the API response instead of generating a new one
+      localStorage.setItem("sessionToken", authResult.token);
+      localStorage.setItem("userEmail", formData.email);
 
-      if (isValid) {
-        await fetch("/api/auth/attempts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: formData.email, action: "reset" }),
-        });
-
-        // Use the token from the API response instead of generating a new one
-        localStorage.setItem("sessionToken", authResult.token);
-        localStorage.setItem("userEmail", formData.email);
-
-        toast.success("ZK Proof verified successfully ✅");
-        router.push("/dashboard");
-      } else {
-        await fetch("/api/auth/attempts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: formData.email, action: "record" }),
-        });
-
-        // using queries this then fetches the updated user data to check if this attempt caused a lock
-        const updatedUserResponse = await fetch("/api/auth/user", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: formData.email }),
-        });
-
-        if (updatedUserResponse.ok) {
-          const { user: updatedUserData } = await updatedUserResponse.json();
-          if (updatedUserData?.failed_attempts >= 5) {
-            toast.error(
-              "Account has been locked for 10 minutes due to too many failed attempts.",
-              {
-                duration: 5000,
-              }
-            );
-          } else {
-            const remainingAttempts =
-              5 - (updatedUserData?.failed_attempts || 0);
-            toast.error(
-              `Zero-Knowledge Proof failed. ${remainingAttempts} attempts remaining before account lock.`,
-              {
-                duration: 4000,
-              }
-            );
-          }
-        }
-      }
+      toast.success("Login successful ✅");
+      router.push("/dashboard");
     } catch (err: any) {
       console.error("Login error:", err);
       setError(err.message || "An unexpected error occurred during login");

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/app/lib/mongodbClient";
 import { generateToken } from "@/app/lib/jwt";
-import { validateProof } from "@/app/lib/zkp";
+import { generateProof, validateProof } from "@/app/lib/zkp";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,10 +17,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verifies the password using ZKP proof validation
+    // generates the proof from the password and challenge
+    const clientProof = await generateProof(password, user.challenge || "");
+
+    // then validates the proof against the stored password hash
     const isValid = await validateProof(
       user.password_hash,
-      password, // client-generated proof
+      clientProof,
       user.challenge || ""
     );
 
