@@ -3,6 +3,7 @@ import React from "react";
 interface VaultEntryProps {
   entry: {
     id: string;
+    _id: string;
     website: string;
     username: string;
     encrypted_password: string;

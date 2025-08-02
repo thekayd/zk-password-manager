@@ -313,7 +313,7 @@ export default function VaultPage() {
                     {filteredEntries.map((entry) => (
                       <VaultEntry
                         key={entry.id}
-                        entry={entry}
+                        entry={{ ...entry, _id: entry.id }}
                         onView={handleView}
                         onEdit={handleEdit}
                         onDelete={handleDelete}

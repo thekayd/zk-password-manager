@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/app/lib/mongodbClient";
+import { ObjectId } from "mongodb";
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +18,14 @@ export async function GET(request: NextRequest) {
       .sort({ created_at: -1 })
       .toArray();
 
-    return NextResponse.json({ entries });
+    // converts ObjectIds to strings for React keys
+    const entriesWithStringIds = entries.map((entry: any) => ({
+      ...entry,
+      id: entry._id.toString(),
+      _id: entry._id.toString(),
+    }));
+
+    return NextResponse.json({ entries: entriesWithStringIds });
   } catch (error: any) {
     console.error("Error fetching vault entries:", error);
     return NextResponse.json(
@@ -77,11 +85,27 @@ export async function PUT(request: NextRequest) {
   try {
     const { id, encryptedPassword } = await request.json();
 
+    if (!id) {
+      return NextResponse.json({ error: "Entry ID required" }, { status: 400 });
+    }
+
     const { db } = await connectToDatabase();
+
+    // Convert string ID to ObjectId
+    let objectId;
+    try {
+      objectId = new ObjectId(id);
+    } catch (error) {
+      return NextResponse.json(
+        { error: "Invalid entry ID format" },
+        { status: 400 }
+      );
+    }
+
     const result = await db
       .collection("password_entries")
       .updateOne(
-        { _id: id },
+        { _id: objectId },
         { $set: { encrypted_password: encryptedPassword } }
       );
 
@@ -90,7 +114,9 @@ export async function PUT(request: NextRequest) {
     }
 
     // This then logs the activity for the updated entry
-    const entry = await db.collection("password_entries").findOne({ _id: id });
+    const entry = await db
+      .collection("password_entries")
+      .findOne({ _id: objectId });
     if (entry) {
       await db.collection("activity_logs").insertOne({
         user_id: entry.user_id,
@@ -120,12 +146,25 @@ export async function DELETE(request: NextRequest) {
 
     const { db } = await connectToDatabase();
 
+    // Convert string ID to ObjectId
+    let objectId;
+    try {
+      objectId = new ObjectId(id);
+    } catch (error) {
+      return NextResponse.json(
+        { error: "Invalid entry ID format" },
+        { status: 400 }
+      );
+    }
+
     // This then gets the entry before deleting for logging
-    const entry = await db.collection("password_entries").findOne({ _id: id });
+    const entry = await db
+      .collection("password_entries")
+      .findOne({ _id: objectId });
 
     const result = await db
       .collection("password_entries")
-      .deleteOne({ _id: id });
+      .deleteOne({ _id: objectId });
 
     if (result.deletedCount === 0) {
       return NextResponse.json({ error: "Entry not found" }, { status: 404 });
