@@ -113,12 +113,12 @@ export default function Recovery() {
           </div>
 
           <div className="text-center">
-            <button
+            {/* <button
               onClick={() => router.push("/dashboard")}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
               Go to Dashboard Now
-            </button>
+            </button> */}
           </div>
 
           <div className="text-center">

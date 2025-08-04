@@ -22,14 +22,6 @@ export default function VaultEntry({
 }: VaultEntryProps) {
   const getWebsiteIcon = (website: string) => {
     const domain = website.toLowerCase();
-    if (domain.includes("google") || domain.includes("gmail")) return "🔍";
-    if (domain.includes("facebook")) return "📘";
-    if (domain.includes("twitter") || domain.includes("x.com")) return "🐦";
-    if (domain.includes("github")) return "🐙";
-    if (domain.includes("linkedin")) return "💼";
-    if (domain.includes("amazon")) return "📦";
-    if (domain.includes("netflix")) return "🎬";
-    if (domain.includes("spotify")) return "🎵";
     return "🌐";
   };
 
