@@ -1,6 +1,6 @@
 import { connectToDatabase } from "@/app/lib/mongodbClient";
 
-// Fetch encrypted vault
+// This fetches the encrypted vault entries
 export async function fetchVault(userId: string) {
   try {
     const { db } = await connectToDatabase();
@@ -12,7 +12,7 @@ export async function fetchVault(userId: string) {
   }
 }
 
-// Fetch activity logs
+// Fetches the activity logs for each user
 export async function fetchActivityLogs(userId: string) {
   try {
     const { db } = await connectToDatabase();
@@ -28,7 +28,7 @@ export async function fetchActivityLogs(userId: string) {
   }
 }
 
-// Fetch recovery shares
+// Fetches the recovery shares
 export async function fetchRecoveryShares(userId: string) {
   try {
     const { db } = await connectToDatabase();
@@ -43,7 +43,7 @@ export async function fetchRecoveryShares(userId: string) {
   }
 }
 
-// Fetch user password hash
+// Fetches the user password hash
 export async function fetchUserPasswordHash(email: string) {
   try {
     const { db } = await connectToDatabase();
@@ -56,7 +56,7 @@ export async function fetchUserPasswordHash(email: string) {
   }
 }
 
-// Fetch user authentication data
+// This fetches the user authentication data
 export async function fetchUserAuthData(email: string) {
   try {
     const { db } = await connectToDatabase();
@@ -79,7 +79,7 @@ export async function fetchUserAuthData(email: string) {
   }
 }
 
-// Fetch WebAuthn ID
+// Fetches the WebAuthn ID for biometric login
 export async function fetchWebAuthnID(email: string) {
   try {
     const { db } = await connectToDatabase();
@@ -93,7 +93,7 @@ export async function fetchWebAuthnID(email: string) {
   }
 }
 
-// Get vault entries
+// Gets the vault entries for the specific user
 export async function getVaultEntries(userId: string) {
   try {
     const { db } = await connectToDatabase();
@@ -109,7 +109,7 @@ export async function getVaultEntries(userId: string) {
   }
 }
 
-// Check duplicate entry
+// Checks for duplicate vault entries
 export async function checkDuplicateEntry(
   userId: string,
   website: string,
@@ -131,7 +131,7 @@ export async function checkDuplicateEntry(
 
 // Shamir's Secret Sharing Queries
 
-// Get user's Shamir configuration
+// Gets the user's Shamir configuration when recovering
 export async function getUserShamirConfig(userId: string) {
   try {
     const { db } = await connectToDatabase();
@@ -151,7 +151,7 @@ export async function getUserShamirConfig(userId: string) {
   }
 }
 
-// Get all Shamir shares for a user
+// Gets all the Shamir shares for a user that was saved when registering
 export async function getUserShamirShares(userId: string) {
   try {
     const { db } = await connectToDatabase();
@@ -167,7 +167,7 @@ export async function getUserShamirShares(userId: string) {
   }
 }
 
-// Validate share hash
+// Validates the share hash
 export async function validateShareHash(
   userId: string,
   shareIndex: number,
@@ -187,7 +187,7 @@ export async function validateShareHash(
   }
 }
 
-// Get recovery attempts for a user
+// This gets the recovery attempts for a user
 export async function getRecoveryAttempts(userId: string, limit: number = 10) {
   try {
     const { db } = await connectToDatabase();
@@ -204,7 +204,7 @@ export async function getRecoveryAttempts(userId: string, limit: number = 10) {
   }
 }
 
-// Get recovery agents for a user
+// Function gets the recovery agents for a user
 export async function getRecoveryAgents(userId: string) {
   try {
     const { db } = await connectToDatabase();
@@ -220,7 +220,7 @@ export async function getRecoveryAgents(userId: string) {
   }
 }
 
-// Check if user has Shamir recovery setup
+// Checks if user has Shamir recovery setup when requesting to recover password
 export async function hasShamirRecovery(userId: string) {
   try {
     const { db } = await connectToDatabase();

@@ -130,7 +130,7 @@ export default function ShareGenerator({
         </div>
       )}
 
-      {/* Configuration Section */}
+      {/* this is the configuration Section */}
       <div className="mb-6 p-4 bg-gray-50 rounded">
         <h3 className="text-lg font-semibold mb-4">Configuration</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -183,7 +183,7 @@ export default function ShareGenerator({
         </button>
       </div>
 
-      {/* Shares Display Section */}
+      {/* this is the shares Display Section */}
       {shares.length > 0 && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">

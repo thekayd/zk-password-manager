@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (!isValid) {
-      // logs failed login attempt
+      // logs failed login attempt in activity log
       await db.collection("activity_logs").insertOne({
         user_id: user.id,
         activity: "Failed login attempt",

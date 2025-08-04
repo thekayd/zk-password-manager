@@ -1,7 +1,7 @@
 import { connectToDatabase } from "@/app/lib/mongodbClient";
 import { generateToken } from "@/app/lib/jwt";
 
-// Save vault entries
+// This saves the vault entries
 export async function saveVault(userId: string, encryptedVault: object) {
   try {
     const { db } = await connectToDatabase();
@@ -19,7 +19,7 @@ export async function saveVault(userId: string, encryptedVault: object) {
   }
 }
 
-// Log activity
+// This function logs the activities of the user
 export async function logActivity(userId: string, activity: string) {
   try {
     const { db } = await connectToDatabase();
@@ -35,7 +35,7 @@ export async function logActivity(userId: string, activity: string) {
   }
 }
 
-// Save recovery share
+// This function saves the recovery shares
 export async function saveRecoveryShare(userId: string, share: string) {
   try {
     const { db } = await connectToDatabase();
@@ -51,7 +51,7 @@ export async function saveRecoveryShare(userId: string, share: string) {
   }
 }
 
-// Update user password hash
+// updates the user password hash
 export async function updateUserPasswordHash(
   email: string,
   passwordHash: string
@@ -68,7 +68,7 @@ export async function updateUserPasswordHash(
   }
 }
 
-// Set new challenge
+// This sets a new challenge when user logs in
 export async function setNewChallenge(email: string, challenge: string) {
   try {
     const { db } = await connectToDatabase();
@@ -80,7 +80,7 @@ export async function setNewChallenge(email: string, challenge: string) {
   }
 }
 
-// Record failed attempt
+// This recirds the failed attempt on the users table
 export async function recordFailedAttempt(email: string) {
   try {
     const { db } = await connectToDatabase();
@@ -100,7 +100,7 @@ export async function recordFailedAttempt(email: string) {
   }
 }
 
-// Reset failed attempts
+// This resets said failed attempts back to 0
 export async function resetFailedAttempts(email: string) {
   try {
     const { db } = await connectToDatabase();
@@ -114,7 +114,7 @@ export async function resetFailedAttempts(email: string) {
   }
 }
 
-// Create user record
+// Creates user record
 export async function createUserRecord(
   email: string,
   passwordHash: string,
@@ -141,7 +141,7 @@ export async function createUserRecord(
   }
 }
 
-// Lock user
+// This function locks users after set failed attempts
 export async function lockUser(email: string) {
   try {
     const { db } = await connectToDatabase();
@@ -156,7 +156,7 @@ export async function lockUser(email: string) {
   }
 }
 
-// Reset lock and attempts
+// Resets lock and attempts back to 0
 export async function resetLockAndAttempts(email: string) {
   try {
     const { db } = await connectToDatabase();
@@ -173,7 +173,7 @@ export async function resetLockAndAttempts(email: string) {
   }
 }
 
-// Save credential ID
+// This saves the users credential ID
 export async function saveCredentialId(credentialId: string, email: string) {
   try {
     const { db } = await connectToDatabase();
@@ -187,7 +187,7 @@ export async function saveCredentialId(credentialId: string, email: string) {
   }
 }
 
-// Save WebAuthn public key
+// Saves the WebAuthn public key for biometrics
 export async function saveWebAuthnPublicKey(
   credential: PublicKeyCredential,
   email: string
@@ -214,7 +214,7 @@ export async function saveWebAuthnPublicKey(
   }
 }
 
-// Add vault entry
+// This function adds vault entrys
 export async function addVaultEntry(
   userId: string,
   website: string,
@@ -237,7 +237,7 @@ export async function addVaultEntry(
   }
 }
 
-// Update vault entry
+// Updates the vault entry
 export async function updateVaultEntry(id: string, encryptedPassword: string) {
   try {
     const { db } = await connectToDatabase();
@@ -254,7 +254,7 @@ export async function updateVaultEntry(id: string, encryptedPassword: string) {
   }
 }
 
-// Delete vault entry
+// Deletes the vault entry
 export async function deleteVaultEntry(id: string) {
   try {
     const { db } = await connectToDatabase();
@@ -266,7 +266,7 @@ export async function deleteVaultEntry(id: string) {
   }
 }
 
-// Save Shamir shares
+// This then saves the Shamir shares
 export async function saveShamirShares(
   userId: string,
   shares: Array<{ index: number; hash: string }>,
@@ -292,7 +292,7 @@ export async function saveShamirShares(
   }
 }
 
-// Log recovery attempt
+// Logs recovery attempts
 export async function logRecoveryAttempt(
   userId: string,
   success: boolean,
@@ -319,7 +319,7 @@ export async function logRecoveryAttempt(
   }
 }
 
-// Save recovery agent
+// This saves the recovery agent
 export async function saveRecoveryAgent(
   userId: string,
   name: string,
@@ -344,7 +344,7 @@ export async function saveRecoveryAgent(
   }
 }
 
-// Update recovery agent share
+// Updates recovery agent share
 export async function updateRecoveryAgentShare(
   agentId: string,
   shareIndex: number
@@ -361,7 +361,7 @@ export async function updateRecoveryAgentShare(
   }
 }
 
-// Delete recovery agent
+// Deletes the recovery agent
 export async function deleteRecoveryAgent(agentId: string) {
   try {
     const { db } = await connectToDatabase();
@@ -373,7 +373,7 @@ export async function deleteRecoveryAgent(agentId: string) {
   }
 }
 
-// Simple authentication functions
+// Authentication functions for user in verifying the proofs and hashes and challanges
 export async function authenticateUser(email: string, password: string) {
   try {
     const { db } = await connectToDatabase();
@@ -412,7 +412,7 @@ export async function createUser(email: string, password: string) {
     await db.collection("users").insertOne({
       id: userId,
       email,
-      password_hash: password, // This should be the derived key
+      password_hash: password,
       failed_attempts: 0,
       challenge: null,
       locked_until: null,

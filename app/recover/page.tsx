@@ -48,7 +48,7 @@ export default function Recovery() {
     setRecoveredPassword(recoveredSecret);
     setStep("success");
 
-    // Automatically log the user in with the recovered password
+    // This handle success function logs the user in with the recovered password when successful recovery
     try {
       const loginResponse = await fetch("/api/auth/login", {
         method: "POST",
@@ -60,7 +60,7 @@ export default function Recovery() {
       });
 
       if (loginResponse.ok) {
-        // Login successful, user can go to dashboard when ready
+        // logs the user for trail
         console.log("Auto-login successful");
       }
     } catch (err) {

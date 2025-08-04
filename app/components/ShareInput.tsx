@@ -73,7 +73,7 @@ export default function ShareInput({
     setSuccess(false);
 
     try {
-      // Filter out empty shares
+      // this filters oout the empty shares
       const nonEmptyShares = shares.filter((share) => share.trim() !== "");
       console.log("Non-empty shares count:", nonEmptyShares.length);
 

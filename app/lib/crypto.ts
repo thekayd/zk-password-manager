@@ -70,7 +70,7 @@
 // AES-GCM Encryption/Decryption using Web Crypto API
 export async function encryptAESGCM(plaintext: string, key: CryptoKey): Promise<{ cipherText: string; iv: string }> {
   const encoder = new TextEncoder();
-  const iv = crypto.getRandomValues(new Uint8Array(12)); // Recommended IV length for AES-GCM
+  const iv = crypto.getRandomValues(new Uint8Array(12)); //  IV length for AES-GCM
   const encrypted = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
@@ -161,7 +161,7 @@ export async function deriveKey(password: string, salt: string = 'zkp-salt'): Pr
   }
 }
 
-// fallback in using Manual XOR Encryption (Fallback)
+// fallback in using Manual XOR Encryption (for Fallback on incompatible devoces)
 export function xorEncryptDecrypt(input: string, key: string): string {
   let output = '';
   for (let i = 0; i < input.length; i++) {

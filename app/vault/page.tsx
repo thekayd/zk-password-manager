@@ -49,7 +49,6 @@ export default function VaultPage() {
     loadEntries();
   }, []);
 
-  // Filter entries based on search term
   useEffect(() => {
     if (!searchTerm.trim()) {
       setFilteredEntries(entries);
@@ -98,7 +97,8 @@ export default function VaultPage() {
 
       const { userId } = await verifyToken(sessionToken);
 
-      // Derive key and encrypt the password
+      // this derives the key and encrypt the password
+      // it fetches the key and stringyfies it allowing for deviration
       const key = await deriveKey(newEntry.masterPassword);
       const { cipherText, iv } = await encryptAESGCM(newEntry.password, key);
       const encryptedData = JSON.stringify({ cipherText, iv });
@@ -157,7 +157,6 @@ export default function VaultPage() {
       if (sessionToken) {
         try {
           const { userId } = await verifyToken(sessionToken);
-          // Activity logging is handled by the API
         } catch (error) {
           console.error("Authentication error:", error);
         }
@@ -326,7 +325,7 @@ export default function VaultPage() {
           </div>
         </div>
 
-        {/* Add New Password Drawer */}
+        {/* This opens the Password Drawer (),maybe fix ui later */}
         {isDrawerOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
             <div className="fixed inset-y-0 right-0 max-w-md w-full bg-white shadow-xl">
@@ -494,7 +493,7 @@ export default function VaultPage() {
           </div>
         )}
 
-        {/* View Password Modal */}
+        {/* open views for Password Modal */}
         {isViewing && selectedEntry && (
           <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
             <div className="bg-white rounded-lg p-6 max-w-md w-full">
@@ -605,7 +604,7 @@ export default function VaultPage() {
           </div>
         )}
 
-        {/* Edit Password Modal */}
+        {/* Edits the Password Modal fields */}
         {isEditing && selectedEntry && (
           <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
             <div className="bg-white rounded-lg p-6 max-w-md w-full">

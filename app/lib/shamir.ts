@@ -78,7 +78,7 @@ function reconstructFromShares(shares: Share[]): string {
 
   try {
     // uses the the first share to reconstruct the secret
-    // all the shares should reconstruct to the same secret
+    // all the shares should then reconstruct to the same secret
     const firstShare = shares[0];
     console.log("Using first share for reconstruction:", firstShare.id);
 
@@ -106,7 +106,7 @@ function reconstructFromShares(shares: Share[]): string {
       secret.length
     );
 
-    // verifies that all other shares reconstruct to the same secret
+    // this then allows for the verification that all other shares reconstruct to the same secret
     for (let i = 1; i < shares.length; i++) {
       const share = shares[i];
       console.log(`Verifying share ${share.id}...`);

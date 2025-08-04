@@ -91,7 +91,7 @@ export async function PUT(request: NextRequest) {
 
     const { db } = await connectToDatabase();
 
-    // Convert string ID to ObjectId
+    // Converts string ID to ObjectId for document id in mongodb
     let objectId;
     try {
       objectId = new ObjectId(id);
@@ -146,7 +146,7 @@ export async function DELETE(request: NextRequest) {
 
     const { db } = await connectToDatabase();
 
-    // Convert string ID to ObjectId
+    // Converts string ID to ObjectId for mongodb
     let objectId;
     try {
       objectId = new ObjectId(id);

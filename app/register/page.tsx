@@ -19,7 +19,7 @@ export default function Register() {
   const [registrationEmail, setRegistrationEmail] = useState("");
   const router = useRouter();
 
-  // Function to check if biometrics are available
+  // this function allows for the checking of the device, if biometrics are available
   const checkBiometricAvailability = async () => {
     try {
       if (!window.PublicKeyCredential) {
@@ -101,7 +101,7 @@ export default function Register() {
       if (result.shares && result.shares.length > 0) {
         setShares(result.shares);
         setShowShares(true);
-        setRegistrationEmail(formData.email); // Store email for biometric continuation
+        setRegistrationEmail(formData.email); // Stores email for biometric continuation
         toast.success(
           "Registration successful! Please save your recovery shares."
         );

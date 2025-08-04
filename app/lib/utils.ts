@@ -12,17 +12,17 @@ export function checkPasswordStrength(password: string): {
 } {
   let score = 0;
 
-  // Length check
+  // Length check for password
   if (password.length >= 8) score += 1;
   if (password.length >= 12) score += 1;
 
-  // Character variety checks
+  // Character variety checks for password
   if (/[a-z]/.test(password)) score += 1;
   if (/[A-Z]/.test(password)) score += 1;
   if (/[0-9]/.test(password)) score += 1;
   if (/[^A-Za-z0-9]/.test(password)) score += 1;
 
-  // Determine label and color
+  // Determines the label and color for heirarchy password strength
   if (score <= 2) {
     return { score, label: "Weak", color: "text-red-500" };
   } else if (score <= 4) {
@@ -50,7 +50,7 @@ export function generatePassword(
 
   let password = "";
 
-  // Ensure at least one character from each category
+  // Ensures that at least one character from each category when generating a new password
   password += lowercase[Math.floor(Math.random() * lowercase.length)];
   password += uppercase[Math.floor(Math.random() * uppercase.length)];
   password += numbers[Math.floor(Math.random() * numbers.length)];
@@ -58,12 +58,12 @@ export function generatePassword(
     password += symbols[Math.floor(Math.random() * symbols.length)];
   }
 
-  // Fill the rest randomly
+  // this fills the rest randomly after making sure each category is done
   for (let i = password.length; i < length; i++) {
     password += chars[Math.floor(Math.random() * chars.length)];
   }
 
-  // Shuffle the password
+  // Shuffles the password when generating
   return password
     .split("")
     .sort(() => Math.random() - 0.5)
