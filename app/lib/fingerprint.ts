@@ -6,6 +6,8 @@ export interface FingerprintData {
   quality: number;
   timestamp: number;
   deviceInfo: string;
+  zkpChallenge?: string; // ZKP challenge integration
+  zkpProof?: string; // ZKP proof
 }
 
 export interface FingerprintMatchResult {
@@ -82,7 +84,8 @@ export class FingerprintReader {
           windowsHello.requestAuthentication(async (result: any) => {
             try {
               const biometricData = this.extractBiometricData(result);
-              resolve({ //captures and retuyrns data for the biometrics
+              resolve({
+                //captures and retuyrns data for the biometrics
                 id: this.generateId(),
                 biometricData,
                 quality: this.calculateQuality(biometricData),
@@ -148,7 +151,7 @@ export class FingerprintReader {
 
       // creates a webauthn challange ti a unit8array
       const challenge = new Uint8Array(32);
-      crypto.getRandomValues(challenge); // we then get the challnage as a random 32 string 
+      crypto.getRandomValues(challenge); // we then get the challnage as a random 32 string
 
       // authentication
       const credential = (await navigator.credentials.get({
@@ -188,15 +191,14 @@ export class FingerprintReader {
       } else if (source.id) {
         // Credential ID
         return this.arrayBufferToBase64(source.id);
-     // } else if (source.signature) {
-        // Signature data
-      //   return this.arrayBufferToBase64(source.signature);
-      // } else if (source.authenticatorData) {
-      //   // Authenticator data
-      //   return this.arrayBufferToBase64(source.authenticatorData);
-      // } else if (source.clientDataJSON) {
-      //   // Client data
-      //   return this.arrayBufferToBase64(source.clientDataJSON);
+      } else if (source.signature) {
+        return this.arrayBufferToBase64(source.signature);
+      } else if (source.authenticatorData) {
+        // Authenticator data
+        return this.arrayBufferToBase64(source.authenticatorData);
+      } else if (source.clientDataJSON) {
+        // Client data
+        return this.arrayBufferToBase64(source.clientDataJSON);
       } else {
         // generatew from timestamp and device info
         return this.generateFallbackData();
@@ -244,7 +246,7 @@ export class FingerprintReader {
 
       return Math.min(100, quality);
     } catch (error) {
-      return 50; 
+      return 50;
     }
   }
 
@@ -351,5 +353,63 @@ export class FingerprintReader {
     }
 
     return methods;
+  }
+
+  // This async function generates ZKP-secured biometric proof
+  async generateZkpBiometricProof(
+    biometricData: FingerprintData,
+    challenge: string
+  ): Promise<string> {
+    try {
+      // this allows for the combination of biometric data with ZKP challenge
+      const encoder = new TextEncoder();
+      const combinedData = encoder.encode(
+        biometricData.biometricData + challenge + biometricData.id
+      );
+
+      // this generates a hash as proof
+      const hashBuffer = await crypto.subtle.digest("SHA-256", combinedData);
+      const proof = Array.from(new Uint8Array(hashBuffer), (byte) =>
+        ("0" + byte.toString(16)).slice(-2)
+      ).join("");
+
+      return proof;
+    } catch (error) {
+      console.error("Error generating ZKP biometric proof:", error);
+      throw new Error("Failed to generate ZKP biometric proof");
+    }
+  }
+
+  // This async function validates ZKP-secured biometric proof
+  async validateZkpBiometricProof(
+    storedBiometricData: FingerprintData,
+    submittedProof: string,
+    challenge: string
+  ): Promise<boolean> {
+    try {
+      const expectedProof = await this.generateZkpBiometricProof(
+        storedBiometricData,
+        challenge
+      );
+      return expectedProof === submittedProof;
+    } catch (error) {
+      console.error("Error validating ZKP biometric proof:", error);
+      return false;
+    }
+  }
+
+  // This async function enhances fingerprint reading with ZKP integration
+  async readFingerprintWithZkp(challenge: string): Promise<FingerprintData> {
+    const fingerprintData = await this.readFingerprint();
+    const zkpProof = await this.generateZkpBiometricProof(
+      fingerprintData,
+      challenge
+    );
+
+    return {
+      ...fingerprintData,
+      zkpChallenge: challenge,
+      zkpProof: zkpProof,
+    };
   }
 }

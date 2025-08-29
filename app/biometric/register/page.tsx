@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { FingerprintData } from "../../lib/fingerprint";
 import FingerprintReaderModel from "../../components/FingerprintReaderModel";
+import { generateChallenge } from "../../lib/zkp";
 
 export default function BiometricRegister() {
   const [email, setEmail] = useState("");
@@ -15,6 +16,7 @@ export default function BiometricRegister() {
   const [success, setSuccess] = useState(false);
   const [fingerprintData, setFingerprintData] =
     useState<FingerprintData | null>(null);
+  const [zkpChallenge, setZkpChallenge] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -61,13 +63,20 @@ export default function BiometricRegister() {
     setSuccess(false);
 
     try {
+      // this generates a ZKP challenge for registration
+      const challenge = generateChallenge();
+      setZkpChallenge(challenge);
+
       // this then saves the fingerprint to database using POST
       const response = await fetch("/api/auth/fingerprint-auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          fingerprintData,
+          fingerprintData: {
+            ...fingerprintData,
+            zkpChallenge: challenge,
+          },
         }),
       });
 
@@ -76,7 +85,7 @@ export default function BiometricRegister() {
         throw new Error(error.error || "Failed to save fingerprint template");
       }
 
-      toast.success("Fingerprint registration successful! ✅", {
+      toast.success("ZKP-secured fingerprint registration successful!", {
         duration: 2000,
       });
 

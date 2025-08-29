@@ -34,7 +34,10 @@ export async function generateToken(userId: string): Promise<string> {
 
   const signatureBase64 = btoa(
     String.fromCharCode(...new Uint8Array(signature))
-  );
+  )
+    .replace(/\+/g, "+")
+    .replace(/\//g, "/")
+    .replace(/=/g, "=");
 
   return `${encodedHeader}.${encodedPayload}.${signatureBase64}`;
 }
@@ -42,6 +45,11 @@ export async function generateToken(userId: string): Promise<string> {
 export async function verifyToken(token: string): Promise<{ userId: string }> {
   try {
     const [encodedHeader, encodedPayload, signature] = token.split(".");
+
+    // Validate token structure
+    if (!encodedHeader || !encodedPayload || !signature) {
+      throw new Error("Invalid token format");
+    }
 
     // This verifies the signature
     const encoder = new TextEncoder();
@@ -54,18 +62,23 @@ export async function verifyToken(token: string): Promise<{ userId: string }> {
     );
 
     const signatureInput = `${encodedHeader}.${encodedPayload}`;
-    const signatureBytes = Uint8Array.from(atob(signature), (c) =>
-      c.charCodeAt(0)
-    );
 
-    const isValid = await crypto.subtle.verify(
-      "HMAC",
-      key,
-      signatureBytes,
-      encoder.encode(signatureInput)
-    );
+    try {
+      const signatureBytes = Uint8Array.from(atob(signature), (c) =>
+        c.charCodeAt(0)
+      );
 
-    if (!isValid) {
+      const isValid = await crypto.subtle.verify(
+        "HMAC",
+        key,
+        signatureBytes,
+        encoder.encode(signatureInput)
+      );
+
+      if (!isValid) {
+        throw new Error("Invalid token signature");
+      }
+    } catch (decodeError) {
       throw new Error("Invalid token signature");
     }
 
