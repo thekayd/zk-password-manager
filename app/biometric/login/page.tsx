@@ -4,99 +4,64 @@ import { useState } from "react";
 import { useRouter } from "next-nprogress-bar";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { toast } from "sonner";
-
 import { generateToken } from "@/app/lib/jwt";
+import { FingerprintData } from "../../lib/fingerprint";
+import FingerprintReaderModel from "../../components/FingerprintReaderModel";
 
 export default function BiometricLogin() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [fingerprintData, setFingerprintData] =
+    useState<FingerprintData | null>(null);
   const router = useRouter();
+
+  const handleFingerprintRead = (data: FingerprintData) => {
+    setFingerprintData(data);
+    setError("");
+    toast.success("Fingerprint captured! Now click Login to authenticate.");
+  };
+
+  const handleError = (errorMessage: string) => {
+    setError(errorMessage);
+    toast.error(errorMessage);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!fingerprintData) {
+      setError("Please capture your fingerprint first");
+      toast.error("Please capture your fingerprint first");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
     try {
-      // This allows for the system to check if biometrics are available
-      if (!window.PublicKeyCredential) {
-        throw new Error(
-          "Biometric authentication is not supported on this device"
-        );
-      }
-
-      const isAvailable =
-        await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-      if (!isAvailable) {
-        throw new Error(
-          "Biometric authentication is not available on this device"
-        );
-      }
-
-      // it then fetches user's biometric ID
-      const biometricResponse = await fetch("/api/auth/webauthn", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-
-      if (!biometricResponse.ok) {
-        throw new Error(
-          "No biometric credentials found for this email. Please use password login."
-        );
-      }
-
-      const { user: biometricId } = await biometricResponse.json();
-
-      if (!biometricId || !biometricId.webauthn_id) {
-        throw new Error(
-          "No biometric credentials found for this email. Please use password login."
-        );
-      }
-
-      const publicKey: PublicKeyCredentialRequestOptions = {
-        challenge: new Uint8Array(32),
-        allowCredentials: [
-          {
-            id: Uint8Array.from(atob(biometricId.webauthn_id), (c) =>
-              c.charCodeAt(0)
-            ),
-            type: "public-key",
-          },
-        ],
-        timeout: 60000,
-      };
-
-      // This then prompts biometric authentication
-      const assertion = await navigator.credentials.get({ publicKey });
-
-      if (!assertion) {
-        // This allows for redirection to password login with email and fallback status
-        router.push(
-          `/login?email=${encodeURIComponent(email)}&fallback=biometric`
-        );
-        return;
-      }
-
-      // calls the biometric login API to log activity and get token
-      const loginResponse = await fetch("/api/auth/biometric-login", {
-        method: "POST",
+      // this uses a put request to verify the fingerprint using our custom API
+      const response = await fetch("/api/auth/fingerprint-auth", {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          userId: biometricId.id,
+          fingerprintData,
         }),
       });
 
-      if (!loginResponse.ok) {
-        throw new Error("Biometric login failed");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Fingerprint verification failed");
       }
 
-      const loginResult = await loginResponse.json();
-      localStorage.setItem("sessionToken", loginResult.token);
+      const result = await response.json();
 
-      toast.success("Biometric authentication successful! ✅");
+      // this then generates a token and logs the user in
+      const token = await generateToken(result.userId);
+      localStorage.setItem("sessionToken", token);
+
+      toast.success("Fingerprint authentication successful! ✅");
       router.push("/dashboard");
     } catch (err: any) {
       console.error("Biometric login error:", err);
@@ -125,9 +90,9 @@ export default function BiometricLogin() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
       <div className="w-full max-w-md space-y-8 bg-white p-8 rounded-lg shadow-md">
         <div>
-          <h2 className="text-3xl font-bold text-center">Biometric Login</h2>
+          <h2 className="text-3xl font-bold text-center">Fingerprint Login</h2>
           <p className="mt-2 text-center text-gray-600">
-            Login with your biometric credentials
+            Login with your fingerprint
           </p>
         </div>
 
@@ -139,6 +104,14 @@ export default function BiometricLogin() {
             <span className="block sm:inline">{error}</span>
           </div>
         )}
+
+        <div className="mt-6">
+          <FingerprintReaderModel
+            mode="read"
+            onFingerprintRead={handleFingerprintRead}
+            onError={handleError}
+          />
+        </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div>
@@ -153,7 +126,7 @@ export default function BiometricLogin() {
               name="email"
               type="email"
               required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:ring-blue-500 focus:border-blue-500"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
@@ -165,9 +138,9 @@ export default function BiometricLogin() {
             <button
               type="submit"
               className="flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading}
+              disabled={loading || !fingerprintData}
             >
-              {loading ? <LoadingSpinner /> : "Login with Biometrics"}
+              {loading ? <LoadingSpinner /> : "Login with Fingerprint"}
             </button>
             <button
               type="button"
