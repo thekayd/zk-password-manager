@@ -32,6 +32,40 @@ export default function Register() {
     }
   };
 
+  // this allows for the logging in of the user after successful registration
+  const autoLoginAfterRegistration = async () => {
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Auto-login failed");
+      }
+
+      // this then stores the authentication token
+      localStorage.setItem("sessionToken", result.token);
+      localStorage.setItem("userEmail", formData.email);
+
+      toast.success("Auto-login successful!");
+
+      continueRegistration();
+    } catch (err: any) {
+      console.error("Auto-login error:", err);
+      toast.error("Auto-login failed, please login manually");
+      router.push("/login");
+    }
+  };
+
   // registration flow continues to biometrics
   const continueRegistration = async () => {
     console.log("Checking biometric availability...");
@@ -110,8 +144,8 @@ export default function Register() {
 
       toast.success("Registration successful! ✅");
 
-      // if no shares, it continues to biometric setup or dashboard
-      continueRegistration();
+      // if no shares, it then automatically logs the user in and continues to setup so the registration has a token
+      await autoLoginAfterRegistration();
     } catch (err: any) {
       setError(err.message);
       console.error(err.message);
@@ -176,9 +210,9 @@ export default function Register() {
 
             <div className="flex space-x-3">
               <button
-                onClick={() => {
+                onClick={async () => {
                   setShowShares(false);
-                  continueRegistration();
+                  await autoLoginAfterRegistration();
                 }}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
