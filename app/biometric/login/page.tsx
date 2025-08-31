@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { generateToken } from "@/app/lib/jwt";
 import { FingerprintData } from "../../lib/fingerprint";
 import FingerprintReaderModel from "../../components/FingerprintReaderModel";
+import { generateChallenge } from "../../lib/zkp";
 
 export default function BiometricLogin() {
   const [email, setEmail] = useState("");
@@ -14,6 +15,7 @@ export default function BiometricLogin() {
   const [error, setError] = useState("");
   const [fingerprintData, setFingerprintData] =
     useState<FingerprintData | null>(null);
+  const [zkpChallenge, setZkpChallenge] = useState("");
   const router = useRouter();
 
   const handleFingerprintRead = (data: FingerprintData) => {
@@ -40,13 +42,20 @@ export default function BiometricLogin() {
     setError("");
 
     try {
+      // this generates a ZKP challenge for this session
+      const challenge = generateChallenge();
+      setZkpChallenge(challenge);
+
       // this uses a put request to verify the fingerprint using our custom API
       const response = await fetch("/api/auth/fingerprint-auth", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          fingerprintData,
+          fingerprintData: {
+            ...fingerprintData,
+            zkpChallenge: challenge,
+          },
         }),
       });
 
@@ -61,7 +70,7 @@ export default function BiometricLogin() {
       const token = await generateToken(result.userId);
       localStorage.setItem("sessionToken", token);
 
-      toast.success("Fingerprint authentication successful! ✅");
+      toast.success("ZKP-secured fingerprint authentication successful!");
       router.push("/dashboard");
     } catch (err: any) {
       console.error("Biometric login error:", err);
@@ -126,7 +135,7 @@ export default function BiometricLogin() {
               name="email"
               type="email"
               required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
