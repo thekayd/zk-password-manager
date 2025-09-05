@@ -5,8 +5,11 @@ import LoadingSpinner from "../../components/LoadingSpinner";
 import { useRouter } from "next-nprogress-bar";
 import { toast } from "sonner";
 import Link from "next/link";
-import { FingerprintData } from "../../lib/fingerprint";
-import FingerprintReaderModel from "../../components/FingerprintReaderModel";
+import {
+  UnifiedBiometricData,
+  UnifiedBiometricSystem,
+} from "../../lib/biometric";
+import BiometricModal from "../../components/BiometricModal";
 import { generateChallenge } from "../../lib/zkp";
 
 export default function BiometricRegister() {
@@ -14,8 +17,9 @@ export default function BiometricRegister() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const [fingerprintData, setFingerprintData] =
-    useState<FingerprintData | null>(null);
+  const [biometricData, setBiometricData] =
+    useState<UnifiedBiometricData | null>(null);
+  const [showBiometricModal, setShowBiometricModal] = useState(false);
   const [zkpChallenge, setZkpChallenge] = useState("");
   const router = useRouter();
 
@@ -36,11 +40,14 @@ export default function BiometricRegister() {
     router.push("/dashboard");
   };
 
-  const handleFingerprintRead = (data: FingerprintData) => {
-    setFingerprintData(data);
+  const handleBiometricRead = (data: UnifiedBiometricData) => {
+    setBiometricData(data);
     setError("");
+    setShowBiometricModal(false);
+
+    const methodName = data.type === "fingerprint" ? "Fingerprint" : "Face";
     toast.success(
-      "Fingerprint captured successfully! Now click Register to save it."
+      `${methodName} captured successfully! Now click Register to save it.`
     );
   };
 
@@ -52,9 +59,9 @@ export default function BiometricRegister() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!fingerprintData) {
-      setError("Please capture your fingerprint first");
-      toast.error("Please capture your fingerprint first");
+    if (!biometricData) {
+      setError("Please capture your biometric data first");
+      toast.error("Please capture your biometric data first");
       return;
     }
 
@@ -67,27 +74,42 @@ export default function BiometricRegister() {
       const challenge = generateChallenge();
       setZkpChallenge(challenge);
 
-      // this then saves the fingerprint to database using POST
-      const response = await fetch("/api/auth/fingerprint-auth", {
+      // generates a ZKP proof for the captured biometric data
+      const biometricSystem = new UnifiedBiometricSystem();
+      await biometricSystem.initialize();
+
+      const zkpProof = await biometricSystem.generateZkpProof(
+        biometricData,
+        challenge
+      );
+
+      // this then updates the biometric data with the ZKP proof
+      biometricData.zkpProof = zkpProof;
+      biometricData.zkpChallenge = challenge;
+
+      // this then saves the biometric data to the database
+      const response = await fetch("/api/auth/biometric", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          fingerprintData: {
-            ...fingerprintData,
-            zkpChallenge: challenge,
-          },
+          biometricData: biometricData,
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to save fingerprint template");
+        throw new Error(error.error || "Failed to save biometric template");
       }
 
-      toast.success("ZKP-secured fingerprint registration successful!", {
-        duration: 2000,
-      });
+      const methodName =
+        biometricData.type === "fingerprint" ? "Fingerprint" : "Face";
+      toast.success(
+        `ZKP-secured ${methodName.toLowerCase()} registration successful!`,
+        {
+          duration: 2000,
+        }
+      );
 
       setSuccess(true);
       sessionStorage.removeItem("registrationEmail");
@@ -96,7 +118,7 @@ export default function BiometricRegister() {
         router.push("/dashboard");
       }, 2500);
     } catch (err: any) {
-      console.error("Fingerprint registration error:", err);
+      console.error("Biometric registration error:", err);
       toast.error(err.message || "Failed to register fingerprint", {
         duration: 3000,
       });
@@ -110,9 +132,9 @@ export default function BiometricRegister() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
       <div className="w-full max-w-md space-y-8 bg-white p-8 rounded-lg shadow-md">
         <div>
-          <h2 className="text-3xl font-bold text-center">Fingerprint Setup</h2>
+          <h2 className="text-3xl font-bold text-center">Biometric Setup</h2>
           <p className="mt-2 text-center text-gray-600">
-            Set up fingerprint authentication for faster login (Optional)
+            Set up biometric authentication for faster login (Optional) and to enhance security
           </p>
         </div>
 
@@ -136,12 +158,29 @@ export default function BiometricRegister() {
         )}
 
         <div className="mt-6">
-          <FingerprintReaderModel
-            mode="read"
-            onFingerprintRead={handleFingerprintRead}
-            onError={handleError}
-          />
+          <button
+            onClick={() => setShowBiometricModal(true)}
+            className="w-full py-3 px-4 border border-transparent rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading}
+          >
+            {biometricData
+              ? "Recapture Biometric Data"
+              : "Setup Biometric Authentication"}
+          </button>
         </div>
+
+        {biometricData && (
+          <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded">
+            <p className="text-sm">
+              ✓ {biometricData.type === "fingerprint" ? "Fingerprint" : "Face"}{" "}
+              data captured
+            </p>
+            <p className="text-xs text-green-500 mt-1">
+              Quality: {biometricData.quality}% | Device:{" "}
+              {biometricData.deviceInfo}
+            </p>
+          </div>
+        )}
 
         <form className="mt-8 space-y-6" onSubmit={handleRegister}>
           <div>
@@ -163,9 +202,9 @@ export default function BiometricRegister() {
             <button
               type="submit"
               className="flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading || !fingerprintData}
+              disabled={loading || !biometricData}
             >
-              {loading ? <LoadingSpinner /> : "Register Fingerprint"}
+              {loading ? <LoadingSpinner /> : "Register Biometric"}
             </button>
             <button
               type="button"
@@ -177,7 +216,22 @@ export default function BiometricRegister() {
             </button>
           </div>
         </form>
+
+        <div className="text-center mt-4">
+          <p className="text-sm text-gray-500">
+            Choose between fingerprint or face recognition
+          </p>
+        </div>
       </div>
+
+      {showBiometricModal && (
+        <BiometricModal
+          mode="register"
+          onBiometricRead={handleBiometricRead}
+          onError={handleError}
+          onClose={() => setShowBiometricModal(false)}
+        />
+      )}
     </div>
   );
 }

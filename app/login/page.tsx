@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next-nprogress-bar";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { generateToken } from "@/app/lib/jwt";
 import { generateChallenge, generateProof, validateProof } from "@/app/lib/zkp";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -326,12 +327,20 @@ function LoginContent() {
             >
               {loading ? <LoadingSpinner /> : "Login with Password"}
             </button>
-            <a
-              href="/biometric/login"
-              className="text-center text-sm text-blue-600 hover:text-blue-500"
-            >
-              Login with Biometrics
-            </a>
+            <div className="flex gap-2">
+              <Link
+                href="/biometric/login"
+                className="flex-1 text-center text-sm text-blue-600 hover:text-blue-500 py-2 px-3 border border-blue-200 rounded-md hover:bg-blue-50"
+              >
+                Login with Biometrics
+              </Link>
+              <Link
+                href="/face/login"
+                className="flex-1 text-center text-sm text-green-600 hover:text-green-500 py-2 px-3 border border-green-200 rounded-md hover:bg-green-50"
+              >
+                Face Recognition
+              </Link>
+            </div>
           </div>
         </form>
 
