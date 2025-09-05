@@ -17,6 +17,27 @@ export default function Register() {
   const [shares, setShares] = useState<any[]>([]);
   const [showShares, setShowShares] = useState(false);
   const [registrationEmail, setRegistrationEmail] = useState("");
+  const [shareEmails, setShareEmails] = useState<string[]>([
+    "",
+    "",
+    "",
+    "",
+    "",
+  ]);
+  const [sendingEmails, setSendingEmails] = useState<boolean[]>([
+    false,
+    false,
+    false,
+    false,
+    false,
+  ]);
+  const [emailStatus, setEmailStatus] = useState<string[]>([
+    "",
+    "",
+    "",
+    "",
+    "",
+  ]);
   const router = useRouter();
 
   // this function allows for the checking of the device, if biometrics are available
@@ -63,6 +84,67 @@ export default function Register() {
       console.error("Auto-login error:", err);
       toast.error("Auto-login failed, please login manually");
       router.push("/login");
+    }
+  };
+
+  // sends email with Shamir share
+  const sendShareEmail = async (
+    shareIndex: number,
+    email: string,
+    shareValue: string
+  ) => {
+    if (!email.trim()) {
+      toast.error("Please enter an email address");
+      return;
+    }
+
+    // updates the sending state to true for the share index and sets the sending emails state to the new sending emails
+    const newSendingEmails = [...sendingEmails];
+    newSendingEmails[shareIndex] = true;
+    setSendingEmails(newSendingEmails);
+
+    // sends the email with the share value to the email address
+    try {
+      const response = await fetch("/api/email/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: email.trim(),
+          subject: `Recovery Share ${shareIndex + 1}`,
+          body: `Hello,\n\nThis email contains your recovery share #${
+            shareIndex + 1
+          } for the ZK Password Manager.`,
+          shareValue: shareValue,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to send email");
+      }
+
+      toast.success(`Share ${shareIndex + 1} sent to ${email} successfully!`);
+
+      // updates the email status to the new email status for the share index and sets the email status to the new email status
+      const newEmailStatus = [...emailStatus];
+      newEmailStatus[shareIndex] = `✓ Sent to ${email}`;
+      setEmailStatus(newEmailStatus);
+
+      // clears the email input after successful send
+      const newShareEmails = [...shareEmails];
+      newShareEmails[shareIndex] = "";
+      setShareEmails(newShareEmails);
+    } catch (err: any) {
+      console.error("Email send error:", err);
+      toast.error(err.message || "Failed to send email");
+    } finally {
+      // resets the sending state to false for the share index
+      const newSendingEmails = [...sendingEmails];
+      newSendingEmails[shareIndex] = false;
+      setSendingEmails(newSendingEmails);
     }
   };
 
@@ -187,7 +269,8 @@ export default function Register() {
               <h3 className="text-lg font-semibold">Recovery Shares</h3>
               <p className="text-sm text-gray-600">
                 Save these shares securely. You'll need 3 out of 5 shares to
-                recover your account.
+                recover your account. You can also send each share to trusted
+                contacts via email.
               </p>
 
               {shares.map((share, index) => (
@@ -201,9 +284,50 @@ export default function Register() {
                       Copy
                     </button>
                   </div>
-                  <p className="text-xs font-mono break-all bg-white p-2 rounded border">
+                  <p className="text-xs font-mono break-all bg-white p-2 rounded border mb-3">
                     {share.value}
                   </p>
+
+                  <div className="border-t pt-3">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <input
+                        type="email"
+                        placeholder="Enter recipient email"
+                        value={shareEmails[index]}
+                        onChange={(e) => {
+                          const newShareEmails = [...shareEmails];
+                          newShareEmails[index] = e.target.value;
+                          setShareEmails(newShareEmails);
+                        }}
+                        className="flex-1 text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        disabled={sendingEmails[index]}
+                      />
+                      <button
+                        onClick={() =>
+                          sendShareEmail(index, shareEmails[index], share.value)
+                        }
+                        disabled={
+                          sendingEmails[index] || !shareEmails[index].trim()
+                        }
+                        className="text-xs bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                      >
+                        {sendingEmails[index] ? (
+                          <>
+                            <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Sending</span>
+                          </>
+                        ) : (
+                          <span>Send</span>
+                        )}
+                      </button>
+                    </div>
+
+                    {emailStatus[index] && (
+                      <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">
+                        {emailStatus[index]}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
