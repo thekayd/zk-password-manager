@@ -15,6 +15,11 @@ export async function generateProof(
   challenge: string
 ): Promise<string> {
   try {
+
+    if (!password || password.length === 0) {
+      throw new Error("Password cannot be empty");
+    }
+
     // This then derives the key from the password
     const key = await deriveKey(password);
     const rawKey = await crypto.subtle.exportKey("raw", key);
