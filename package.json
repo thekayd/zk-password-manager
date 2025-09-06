@@ -16,6 +16,7 @@
     "clsx": "^2.1.1",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "face-api.js": "^0.22.2",
     "lucide-react": "^0.514.0",
     "mongodb": "^6.18.0",
     "mongoose": "^8.17.0",
