@@ -334,12 +334,12 @@ function LoginContent() {
               >
                 Login with Biometrics
               </Link>
-              <Link
+              {/* <Link
                 href="/face/login"
                 className="flex-1 text-center text-sm text-green-600 hover:text-green-500 py-2 px-3 border border-green-200 rounded-md hover:bg-green-50"
               >
                 Face Recognition
-              </Link>
+              </Link> */}
             </div>
           </div>
         </form>
